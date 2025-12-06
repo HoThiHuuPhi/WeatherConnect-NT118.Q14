@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "713310723970",
+    "project_id": "weatherapp-nt118",
+    "storage_bucket": "weatherapp-nt118.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:713310723970:android:d078cfe16dc80badbbb99b",
+        "android_client_info": {
+          "package_name": "com.example.doanck"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBWjuRv8dFwNRPDhDU8yjdslB3J7tM2Z5g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
