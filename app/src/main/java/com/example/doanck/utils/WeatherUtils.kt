@@ -1,8 +1,8 @@
 package com.example.doanck.utils
 
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
-import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.doanck.R
+
 
 enum class WeatherEffectType {
     SUNNY,
@@ -37,27 +37,55 @@ object WeatherUtils {
         return "$weatherText\n$windText"
     }
 
-    fun getIconByCode(code: Int): ImageVector {
+    fun getWeatherIcon(code: Int, isDay: Boolean): Int {
         return when (code) {
-            0 -> Icons.Rounded.WbSunny // Clear sky
-            1, 2, 3 -> Icons.Rounded.Cloud // Clear, cloudy, overcast
-            45, 48 -> Icons.Rounded.BlurOn // Fog and rime fog
 
-            // Drizzle, Rain, Rain Showers
-            51, 53, 55, 61, 63, 65, 80, 81, 82 -> Icons.Rounded.WaterDrop
+            // CLEAR SKY
+            0 -> if (isDay) R.drawable.ic_day_clear else R.drawable.ic_night_clear
 
-            // Freezing Drizzle, Freezing Rain
-            56, 57, 66, 67 -> Icons.Rounded.AcUnit
+            // MAINLY CLEAR
+            1 -> if (isDay) R.drawable.day_mostly_clear else R.drawable.night_mostly_clear
 
-            // Snow, Snow Grains, Snow Showers
-            71, 73, 75, 77, 85, 86 -> Icons.Rounded.AcUnit
+            // PARTLY CLOUDY
+            2 -> if (isDay) R.drawable.ic_day_partly_cloud else R.drawable.ic_night_partly_cloud
 
-            // Thunderstorm, Thunderstorm with Hail
-            95, 96, 99 -> Icons.Rounded.FlashOn
+            // OVERCAST
+            3 -> R.drawable.ic_overcast
 
-            else -> Icons.Rounded.Cloud
+            // FOG
+            45, 48 -> if (isDay) R.drawable.ic_fog else R.drawable.ic_fog
+
+            // DRIZZLE
+            51, 53, 55 -> if (isDay) R.drawable.day_drizzle else R.drawable.night_drizzle
+
+            // RAIN
+            61, 63, 65 -> R.drawable.rain
+
+            // FREEZING RAIN / ICE
+            66, 67 -> R.drawable.freezing_rain
+
+            // SNOWFALL
+            71, 73, 75 -> if (isDay) R.drawable.day_snowfall else R.drawable.snowy
+
+            // SNOW GRAINS
+            77 -> R.drawable.snow
+
+            // RAIN SHOWERS
+            80, 81, 82 -> R.drawable.rain
+
+            // SNOW SHOWERS
+            85, 86 -> R.drawable.snowy
+
+            // THUNDERSTORM
+            95, 96, 99 -> if (isDay) R.drawable.day_storm else R.drawable.night_storm
+
+            // DEFAULT
+            else -> R.drawable.shooting_star
         }
     }
+
+
+
 
     fun getDescriptionByCode(code: Int): String {
         return when (code) {
@@ -137,8 +165,8 @@ object WeatherUtils {
             // 56, 57, 66, 67, 71, 73, 75, 77, 85, 86: Freezing Drizzle/Rain, Snow, Snow Grains, Snow Showers
             in 56..57, in 66..67, in 71..79, in 85..86 -> WeatherBackground(
                 effectType = WeatherEffectType.SNOW,
-                gradientStartColor = 0xFFB3E5FC, // Xanh tuyết
-                gradientEndColor = 0xFFE1F5FE
+                gradientStartColor = 0xFF90A4AE,
+                gradientEndColor = 0xFFCFD8DC
             )
             // 95, 96, 99: Thunderstorm, Thunderstorm with Hail
             in 95..99 -> WeatherBackground(

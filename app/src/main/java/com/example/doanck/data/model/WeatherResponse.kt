@@ -35,5 +35,7 @@ data class HourlyUnits(
     @SerializedName("weather_code")
     val weatherCodes: List<Int>,
     @SerializedName("windgusts_10m")
-    val windGusts: List<Double>
+    val windGusts: List<Double>,
+    @SerializedName("is_day")
+    val isDayList: List<Int> = emptyList() // KHỞI TẠO MẶC ĐỊNH)
 )

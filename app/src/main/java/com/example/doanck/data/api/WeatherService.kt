@@ -11,7 +11,7 @@ interface WeatherService {
         @Query("longitude") lon: Double,
         @Query("current") current: String = "temperature_2m,weather_code,is_day",
         @Query("daily") daily: String = "temperature_2m_max,temperature_2m_min,weather_code",
-        @Query("hourly") hourly: String = "temperature_2m,weather_code,windgusts_10m",
+        @Query("hourly") hourly: String = "temperature_2m,weather_code,windgusts_10m,is_day",
         @Query("timezone") timezone: String = "auto",
         @Query("temperature_unit") tempUnit: String = "celsius"
     ): WeatherResponse

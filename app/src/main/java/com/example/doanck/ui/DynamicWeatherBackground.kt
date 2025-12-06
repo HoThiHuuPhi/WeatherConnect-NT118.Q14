@@ -37,6 +37,17 @@ fun DynamicWeatherBackground(
     backgroundData: WeatherBackground,
     modifier: Modifier = Modifier.fillMaxSize()
 ) {
+    val infiniteTransitionSun = rememberInfiniteTransition(label = "sun")
+    val sunScale by infiniteTransitionSun.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3000, easing = EaseInOut),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "sunScale"
+    )
+
     val particles = remember { mutableStateListOf<Particle>() }
     val clouds = remember { mutableStateListOf<Cloud>() }
     val random = remember { Random(System.currentTimeMillis()) }
@@ -56,7 +67,7 @@ fun DynamicWeatherBackground(
                         width = random.nextFloat() * 300f + 380f,
                         height = random.nextFloat() * 120f + 160f,
                         speed = random.nextFloat() * 0.00015f + 0.00005f,
-                        color = Color(0xFFD3DAE8).copy(alpha = 0.95f)
+                        color = Color(0xFFFFFFFF).copy(alpha = 0.95f)
                     )
                 }
             }
@@ -208,6 +219,11 @@ fun DynamicWeatherBackground(
     }
 
     Canvas(modifier = modifier) {
+
+        val w = size.width
+        val h = size.height
+
+        // Vẽ nền
         drawRect(
             brush = Brush.verticalGradient(
                 colors = listOf(
@@ -217,73 +233,89 @@ fun DynamicWeatherBackground(
             )
         )
 
-        val w = size.width
-        val h = size.height
-
+        // Vẽ mây
         clouds.forEach { c ->
-
             val cx = c.x * w
             val cy = c.y * h
             val baseRadius = c.width / 4f
 
             drawCircle(c.color, radius = baseRadius * 1.1f, center = Offset(cx, cy))
-            drawCircle(c.color, radius = baseRadius * 0.8f, center = Offset(cx - baseRadius * 1.5f, cy - 20f))
-            drawCircle(c.color, radius = baseRadius * 0.9f, center = Offset(cx - baseRadius * 0.8f, cy + 30f))
-            drawCircle(c.color, radius = baseRadius * 0.7f, center = Offset(cx + baseRadius * 1.4f, cy - 15f))
-            drawCircle(c.color, radius = baseRadius * 0.6f, center = Offset(cx + baseRadius * 0.7f, cy + 40f))
+            drawCircle(
+                c.color,
+                radius = baseRadius * 0.8f,
+                center = Offset(cx - baseRadius * 1.5f, cy - 20f)
+            )
+            drawCircle(
+                c.color,
+                radius = baseRadius * 0.9f,
+                center = Offset(cx - baseRadius * 0.8f, cy + 30f)
+            )
+            drawCircle(
+                c.color,
+                radius = baseRadius * 0.7f,
+                center = Offset(cx + baseRadius * 1.4f, cy - 15f)
+            )
+            drawCircle(
+                c.color,
+                radius = baseRadius * 0.6f,
+                center = Offset(cx + baseRadius * 0.7f, cy + 40f)
+            )
         }
 
-
+        // Vẽ particles
         particles.forEach { p ->
             val pos = Offset(p.x * w, p.y * h)
 
             when (backgroundData.effectType) {
                 WeatherEffectType.RAIN -> {
-                    val end = pos + Offset(0f, p.size)
                     drawLine(
                         color = p.color,
                         start = pos,
-                        end = end,
+                        end = pos + Offset(0f, p.size),
                         strokeWidth = 2f,
                         cap = StrokeCap.Round
                     )
                 }
 
-                WeatherEffectType.SNOW -> {
-                    drawCircle(
-                        color = p.color,
-                        radius = p.size,
-                        center = pos
-                    )
+                WeatherEffectType.SNOW, WeatherEffectType.STARRY_NIGHT -> {
+                    drawCircle(color = p.color, radius = p.size, center = pos)
                 }
 
                 WeatherEffectType.STORM -> {
-                    val end = pos + Offset(0f, p.size)
                     drawLine(
                         color = p.color,
                         start = pos,
-                        end = end,
+                        end = pos + Offset(0f, p.size),
                         strokeWidth = 3f,
                         cap = StrokeCap.Round
                     )
                 }
 
-                WeatherEffectType.STARRY_NIGHT -> {
-                    drawCircle(
-                        color = p.color,
-                        radius = p.size,
-                        center = pos
-                    )
-                }
-
-                else -> {
-                    drawCircle(
-                        color = p.color,
-                        radius = p.size,
-                        center = pos
-                    )
-                }
+                else -> drawCircle(color = p.color, radius = p.size, center = pos)
             }
+        }
+
+        // --- Vẽ mặt trời **sau cùng** ---
+        if (backgroundData.effectType == WeatherEffectType.SUNNY) {
+            val sunCenterX = w * 0.85f
+            val sunCenterY = h * 0.15f
+            val sunRadius = 60f * sunScale
+
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFFFDB813).copy(alpha = 0.6f), Color.Transparent),
+                    center = Offset(sunCenterX, sunCenterY),
+                    radius = sunRadius * 2
+                ),
+                center = Offset(sunCenterX, sunCenterY),
+                radius = sunRadius * 2
+            )
+
+            drawCircle(
+                color = Color(0xFFFDB813),
+                center = Offset(sunCenterX, sunCenterY),
+                radius = sunRadius
+            )
         }
     }
 }
@@ -291,6 +323,6 @@ fun DynamicWeatherBackground(
 @Preview
 @Composable
 fun PreviewDynamicWeather() {
-    val bg = WeatherBackground(WeatherEffectType.RAIN, 0xFF607D8B, 0xFFB0BEC5)
+    val bg = WeatherBackground(WeatherEffectType.RAIN, 0xFF87CEEB, 0xFFFFFACD)
     DynamicWeatherBackground(backgroundData = bg)
 }
