@@ -2,17 +2,21 @@ package com.example.doanck.ui.chat
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.location.Geocoder
 import android.location.Location
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.util.Base64
 import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority // <--- Import Mới
-import com.google.android.gms.tasks.CancellationTokenSource // <--- Import Mới
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -20,9 +24,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.util.Locale
 
 class CommunityChatViewModel : ViewModel() {
+
+    private val db = Firebase.firestore
+    private val auth = Firebase.auth
 
     private val _messages = MutableStateFlow<List<CommunityMessage>>(emptyList())
     val messages = _messages.asStateFlow()
@@ -30,19 +39,17 @@ class CommunityChatViewModel : ViewModel() {
     private val _isLocationReady = MutableStateFlow(false)
     val isLocationReady = _isLocationReady.asStateFlow()
 
-    private val _currentAddress = MutableStateFlow("Đang xác định vị trí...")
+    private val _currentAddress = MutableStateFlow("Đang xác định...")
     val currentAddress = _currentAddress.asStateFlow()
 
-    // Biến lưu Nickname
     private val _nickname = MutableStateFlow("")
     val nickname = _nickname.asStateFlow()
 
+    private var allRawMessages = listOf<CommunityMessage>()
     private var currentUserLocation: Location? = null
-    private val db = Firebase.firestore
-    private val auth = Firebase.auth
 
     init {
-        signInAnonymously()
+        signInAnonymous()
         listenToMessages()
     }
 
@@ -50,119 +57,170 @@ class CommunityChatViewModel : ViewModel() {
         _nickname.value = name
     }
 
-    // --- SỬA LẠI HÀM NÀY: Dùng getCurrentLocation để ép lấy GPS ---
-    @SuppressLint("MissingPermission")
-    fun getUserLocation(context: Context) {
-        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-
-        // Tạo token để hủy nếu tìm lâu quá (tránh treo app)
-        val cancellationTokenSource = CancellationTokenSource()
-
-        // Sử dụng PRIORITY_HIGH_ACCURACY để ép bật GPS chính xác nhất
-        fusedLocationClient.getCurrentLocation(
-            Priority.PRIORITY_HIGH_ACCURACY,
-            cancellationTokenSource.token
-        ).addOnSuccessListener { location: Location? ->
-            if (location != null) {
-                // 1. Lưu vị trí tìm được
-                currentUserLocation = location
-                _isLocationReady.value = true
-
-                // 2. Dịch tọa độ sang tên đường
-                getAddressFromLocation(context, location.latitude, location.longitude)
-
-                Log.d("GPS", "Tìm thấy: ${location.latitude}, ${location.longitude}")
-            } else {
-                // Trường hợp vẫn null (hiếm gặp nếu dùng cách này)
-                _isLocationReady.value = true
-                _currentAddress.value = "Vui lòng bật Google Maps để mồi GPS"
-            }
-        }.addOnFailureListener {
-            _isLocationReady.value = true
-            _currentAddress.value = "Lỗi GPS: ${it.message}"
-        }
-    }
-
-    private fun getAddressFromLocation(context: Context, lat: Double, lng: Double) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val geocoder = Geocoder(context, Locale.getDefault())
-                val addresses = geocoder.getFromLocation(lat, lng, 1)
-                if (!addresses.isNullOrEmpty()) {
-                    val address = addresses[0]
-                    val district = address.subAdminArea ?: address.locality ?: ""
-                    val province = address.adminArea ?: ""
-                    _currentAddress.value = if (district.isNotEmpty()) "$district, $province" else province
-                }
-            } catch (e: Exception) { Log.e("Geo", "Lỗi: ${e.message}") }
-        }
-    }
-
-    private fun signInAnonymously() {
+    private fun signInAnonymous() {
         if (auth.currentUser == null) auth.signInAnonymously()
     }
 
-    fun sendMessage(content: String, severity: String, isAnonymous: Boolean, context: Context) {
-        val currentUserId = auth.currentUser?.uid ?: "Unknown"
+    // ---------------------------------------------------------
+    // Lấy vị trí GPS
+    // ---------------------------------------------------------
+    @SuppressLint("MissingPermission")
+    fun getUserLocation(context: Context) {
+        val client = LocationServices.getFusedLocationProviderClient(context)
+        val cancel = CancellationTokenSource()
 
-        // Logic chọn tên hiển thị
-        val finalName = if (isAnonymous) "Ẩn danh" else if (_nickname.value.isNotBlank()) _nickname.value else "User-${currentUserId.take(4)}"
+        client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancel.token)
+            .addOnSuccessListener { loc ->
+                if (loc != null) {
+                    currentUserLocation = loc
+                    _isLocationReady.value = true
+                    getAddress(context, loc.latitude, loc.longitude)
+                    filterMessages()
+                } else {
+                    _isLocationReady.value = true
+                    _currentAddress.value = "Không lấy được GPS"
+                }
+            }
+            .addOnFailureListener {
+                _isLocationReady.value = true
+                _currentAddress.value = "Lỗi GPS"
+            }
+    }
+
+    // ---------------------------------------------------------
+    // Chuyển GPS → tên quận/huyện
+    // ---------------------------------------------------------
+    private fun getAddress(context: Context, lat: Double, lng: Double) {
+        viewModelScope.launch(Dispatchers.IO) {
+            kotlin.runCatching {
+                val geo = Geocoder(context, Locale.getDefault())
+                val list = geo.getFromLocation(lat, lng, 1)
+                if (!list.isNullOrEmpty()) {
+                    val a = list[0]
+                    val district = a.subAdminArea ?: a.locality ?: ""
+                    val province = a.adminArea ?: ""
+                    _currentAddress.value = "$district, $province"
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------
+    // Lắng nghe Firestore realtime
+    // ---------------------------------------------------------
+    private fun listenToMessages() {
+        db.collection("messages")
+            .orderBy("timestamp")
+            .addSnapshotListener { snap, e ->
+
+                if (e != null || snap == null) return@addSnapshotListener
+
+                val temp = snap.map { doc ->
+                    CommunityMessage(
+                        id = doc.id,
+                        userId = doc.getString("userId") ?: "",
+                        message = doc.getString("message") ?: "",
+                        severity = doc.getString("severity") ?: "info",
+                        anonymous = doc.getBoolean("anonymous") ?: false,
+                        timestamp = doc.getLong("timestamp") ?: 0L,
+                        realUserId = doc.getString("realUserId"),
+                        latitude = doc.getDouble("latitude"),
+                        longitude = doc.getDouble("longitude"),
+                        imageUrl = doc.getString("imageUrl") // BASE64
+                    )
+                }
+
+                allRawMessages = temp
+                filterMessages()
+            }
+    }
+
+    // ---------------------------------------------------------
+    // Lọc tin nhắn trong bán kính 5km
+    // ---------------------------------------------------------
+    private fun filterMessages() {
+        val user = currentUserLocation ?: return
+        val result = allRawMessages.filter { msg ->
+            if (msg.latitude == null || msg.longitude == null) false
+            else {
+                val loc = Location("msg").apply {
+                    latitude = msg.latitude
+                    longitude = msg.longitude
+                }
+                user.distanceTo(loc) <= 5000
+            }
+        }
+        _messages.value = result
+    }
+
+    // ---------------------------------------------------------
+    // Gửi text + gửi ảnh
+    // ---------------------------------------------------------
+
+    fun sendMessage(text: String, severity: String, anonymous: Boolean, context: Context) {
+        sendMessageInternal(text, severity, anonymous, context, null)
+    }
+
+    fun sendImageMessage(uri: Uri, caption: String, severity: String, anonymous: Boolean, context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+
+            val base64 = uriToBase64(context, uri)
+
+            withContext(Dispatchers.Main) {
+                if (base64 != null) {
+                    sendMessageInternal(caption, severity, anonymous, context, base64)
+                } else {
+                    Toast.makeText(context, "Ảnh lỗi hoặc quá lớn!", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun sendMessageInternal(text: String, severity: String, anonymous: Boolean, context: Context, base64Img: String?) {
+
+        val uid = auth.currentUser?.uid ?: "unknown"
+        val name = when {
+            anonymous -> "Ẩn danh"
+            _nickname.value.isNotBlank() -> _nickname.value
+            else -> "User-${uid.take(4)}"
+        }
 
         val lat = currentUserLocation?.latitude ?: 0.0
         val lng = currentUserLocation?.longitude ?: 0.0
 
-        val messageData = hashMapOf(
-            "userId" to finalName,
-            "realUserId" to currentUserId,
-            "message" to content,
+        val data = hashMapOf(
+            "userId" to name,
+            "realUserId" to uid,
+            "message" to text,
             "severity" to severity,
-            "anonymous" to isAnonymous,
+            "anonymous" to anonymous,
             "timestamp" to System.currentTimeMillis(),
             "latitude" to lat,
-            "longitude" to lng
+            "longitude" to lng,
+            "imageUrl" to base64Img
         )
 
-        db.collection("messages").add(messageData)
-            .addOnSuccessListener {
-                Handler(Looper.getMainLooper()).post {
-                    Toast.makeText(context, "✅ Đã gửi!", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .addOnFailureListener {
-                Handler(Looper.getMainLooper()).post {
-                    Toast.makeText(context, "❌ Lỗi mạng", Toast.LENGTH_SHORT).show()
-                }
-            }
+        db.collection("messages").add(data)
+            .addOnSuccessListener { Toast.makeText(context, "Đã gửi!", Toast.LENGTH_SHORT).show() }
+            .addOnFailureListener { Toast.makeText(context, "Lỗi mạng!", Toast.LENGTH_SHORT).show() }
     }
 
-    private fun listenToMessages() {
-        db.collection("messages").orderBy("timestamp").addSnapshotListener { snapshots, e ->
-            if (e != null) return@addSnapshotListener
-            if (snapshots != null) {
-                val listMsg = ArrayList<CommunityMessage>()
-                for (doc in snapshots) {
-                    val lat = doc.getDouble("latitude") ?: 0.0
-                    val lng = doc.getDouble("longitude") ?: 0.0
-                    val msgLocation = Location("msg").apply { latitude = lat; longitude = lng }
-                    var distance = 0f
-                    if (currentUserLocation != null) distance = currentUserLocation!!.distanceTo(msgLocation)
+    // ---------------------------------------------------------
+    // Nén ảnh → BASE64
+    // ---------------------------------------------------------
+    private fun uriToBase64(context: Context, uri: Uri): String? {
+        return try {
+            val input = context.contentResolver.openInputStream(uri)
+            val bmp = BitmapFactory.decodeStream(input)
 
-                    if (distance <= 10000 || currentUserLocation == null) {
-                        listMsg.add(CommunityMessage(
-                            id = doc.id,
-                            userId = doc.getString("userId") ?: "",
-                            message = doc.getString("message") ?: "",
-                            severity = doc.getString("severity") ?: "info",
-                            anonymous = doc.getBoolean("anonymous") ?: false,
-                            timestamp = doc.getLong("timestamp") ?: 0L,
-                            latitude = lat,
-                            longitude = lng,
-                            realUserId = doc.getString("realUserId")
-                        ))
-                    }
-                }
-                _messages.value = listMsg
-            }
+            val resized = Bitmap.createScaledBitmap(bmp, 600, (bmp.height * 600f / bmp.width).toInt(), true)
+
+            val out = ByteArrayOutputStream()
+            resized.compress(Bitmap.CompressFormat.JPEG, 70, out)
+
+            Base64.encodeToString(out.toByteArray(), Base64.DEFAULT)
+        } catch (e: Exception) {
+            null
         }
     }
 }
