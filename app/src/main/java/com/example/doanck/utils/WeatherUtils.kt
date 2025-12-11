@@ -1,6 +1,5 @@
 package com.example.doanck.utils
 
-import androidx.compose.material.icons.rounded.*
 import com.example.doanck.R
 
 
@@ -44,7 +43,7 @@ object WeatherUtils {
             0 -> if (isDay) R.drawable.ic_day_clear else R.drawable.ic_night_clear
 
             // MAINLY CLEAR
-            1 -> if (isDay) R.drawable.day_mostly_clear else R.drawable.night_mostly_clear
+            1 -> if (isDay) R.drawable.ic_day_mostly_clear else R.drawable.ic_night_mostly_clear
 
             // PARTLY CLOUDY
             2 -> if (isDay) R.drawable.ic_day_partly_cloud else R.drawable.ic_night_partly_cloud
@@ -56,31 +55,31 @@ object WeatherUtils {
             45, 48 -> if (isDay) R.drawable.ic_fog else R.drawable.ic_fog
 
             // DRIZZLE
-            51, 53, 55 -> if (isDay) R.drawable.day_drizzle else R.drawable.night_drizzle
+            51, 53, 55 -> if (isDay) R.drawable.ic_day_drizzle else R.drawable.ic_night_drizzle
 
             // RAIN
-            61, 63, 65 -> R.drawable.rain
+            61, 63, 65 -> R.drawable.ic_rain
 
             // FREEZING RAIN / ICE
-            66, 67 -> R.drawable.freezing_rain
+            66, 67 -> R.drawable.ic_freezing_rain
 
             // SNOWFALL
-            71, 73, 75 -> if (isDay) R.drawable.day_snowfall else R.drawable.snowy
+            71, 73, 75 -> if (isDay) R.drawable.ic_day_snowfall else R.drawable.ic_snowy
 
             // SNOW GRAINS
-            77 -> R.drawable.snow
+            77 -> R.drawable.ic_snow
 
             // RAIN SHOWERS
-            80, 81, 82 -> R.drawable.rain
+            80, 81, 82 -> R.drawable.ic_rain
 
             // SNOW SHOWERS
-            85, 86 -> R.drawable.snowy
+            85, 86 -> R.drawable.ic_snowy
 
             // THUNDERSTORM
-            95, 96, 99 -> if (isDay) R.drawable.day_storm else R.drawable.night_storm
+            95, 96, 99 -> if (isDay) R.drawable.ic_day_storm else R.drawable.ic_night_storm
 
             // DEFAULT
-            else -> R.drawable.shooting_star
+            else -> R.drawable.ic_shooting_star
         }
     }
 

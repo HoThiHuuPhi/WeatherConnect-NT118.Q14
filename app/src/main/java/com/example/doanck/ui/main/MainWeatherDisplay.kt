@@ -1,4 +1,4 @@
-package com.example.doanck.ui.components
+package com.example.doanck.ui.main
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
