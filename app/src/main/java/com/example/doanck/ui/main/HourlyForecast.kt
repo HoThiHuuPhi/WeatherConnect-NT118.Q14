@@ -24,18 +24,20 @@ data class HourlyDisplayItem(
     val temp: Int
 )
 
+private val HourlyGlassDark = Color(0xFF020617).copy(alpha = 0.4f)
+
 @Composable
 fun HourlyForecastSection(
     summaryText: String,
     hourlyData: List<HourlyDisplayItem>,
-    unit: String // <--- THAM SỐ MỚI
+    unit: String
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 20.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF262C42).copy(alpha = 0.8f))
+            .background(HourlyGlassDark)
             .padding(16.dp)
     ) {
         Column {
@@ -89,9 +91,9 @@ fun HourlyItem(item: HourlyDisplayItem, unit: String) { // <--- NHẬN UNIT
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = "${item.temp}°$unit", // <--- HIỂN THỊ ĐƠN VỊ
+            text = "${item.temp}°$unit",
             color = Color.White,
-            fontSize = 20.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.Normal,
             fontFamily = SFProDisplay
         )

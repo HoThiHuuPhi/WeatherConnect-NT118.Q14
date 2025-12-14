@@ -36,14 +36,16 @@ import com.google.android.gms.location.LocationServices
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.roundToInt
 
-// Data UI
 data class WeatherUIData(
     val current: CurrentDisplayData,
     val hourly: List<HourlyDisplayItem>,
+    val daily: List<DailyDisplayItem>,
     val summary: String
 )
 
@@ -51,7 +53,7 @@ data class WeatherUIData(
 fun MainScreen(
     onOpenCommunityChat: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
-    onOpenSearch: () -> Unit = {}, // ✅ Callback mở màn hình Tìm kiếm riêng
+    onOpenSearch: () -> Unit = {},
     onOpenWeatherMap: () -> Unit = {},
     onOpenRescueMap: () -> Unit = {}
 ) {
@@ -60,15 +62,25 @@ fun MainScreen(
     val dataStore = remember { AppDataStore(context) }
     val networkMonitor = remember { NetworkMonitor(context) }
 
+    // --- State Setup ---
     val enableAnimation by dataStore.enableAnimation.collectAsState(initial = true)
     val tempUnit by dataStore.tempUnit.collectAsState(initial = "C")
     val isOnline by networkMonitor.isOnlineFlow.collectAsState(initial = false)
     val sosQueue by dataStore.sosQueue.collectAsState(initial = emptyList())
 
+    // --- State cho BottomSheet Chi tiết ngày (Lấy từ DailyForecast) ---
+    var selectedDay by remember { mutableStateOf<DailyDisplayItem?>(null) }
+    var showDetailSheet by remember { mutableStateOf(false) }
+
+    // --- Location & SOS Logic ---
+    val locationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    var currentBackgroundData by remember { mutableStateOf(WeatherBackground(WeatherEffectType.CLOUDY, 0xFFB0E0E6, 0xFFFFFACD)) }
+    var locationData by remember { mutableStateOf<LocationData?>(null) }
+    var showSOSDialog by remember { mutableStateOf(false) }
     var showRescueMonitor by remember { mutableStateOf(false) }
     var isFlushingQueue by remember { mutableStateOf(false) }
 
-    // Auto-Sync SOS
+    // Logic gửi SOS Offline
     LaunchedEffect(isOnline, sosQueue) {
         if (isOnline && sosQueue.isNotEmpty() && !isFlushingQueue) {
             isFlushingQueue = true
@@ -80,11 +92,7 @@ fun MainScreen(
         }
     }
 
-    val locationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
-    var currentBackgroundData by remember { mutableStateOf(WeatherBackground(WeatherEffectType.CLOUDY, 0xFFB0E0E6, 0xFFFFFACD)) }
-    var locationData by remember { mutableStateOf<LocationData?>(null) }
-    var showSOSDialog by remember { mutableStateOf(false) }
-
+    // Permission Check
     var permissionGranted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permissionGranted = it }
 
@@ -100,15 +108,16 @@ fun MainScreen(
     var selectedTab by remember { mutableStateOf(MainTab.WEATHER) }
     var isWeatherReady by remember { mutableStateOf(false) }
 
+    // --- UI RENDER ---
     Box(modifier = Modifier.fillMaxSize()) {
-        // LAYER 1: NỀN
+        // LAYER 1: Background
         if (enableAnimation) {
             DynamicWeatherBackground(currentBackgroundData, Modifier.fillMaxSize())
         } else {
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(currentBackgroundData.gradientStartColor), Color(currentBackgroundData.gradientEndColor)))))
         }
 
-        // LAYER 2: UI CHÍNH
+        // LAYER 2: Main Content
         if (!permissionGranted) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Vui lòng cấp quyền vị trí", color = Color.White) }
         } else if (locationData == null) {
@@ -120,12 +129,20 @@ fun MainScreen(
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     when (selectedTab) {
                         MainTab.WEATHER -> {
-                            WeatherContent(
-                                lat = locationData!!.lat, lon = locationData!!.lon, cityName = locationData!!.cityName, tempUnit = tempUnit,
-                                onBackgroundChange = { bg -> currentBackgroundData = bg }, onContentReady = { isWeatherReady = true }
+                            WeatherContentV2( // Hàm tách riêng bên dưới
+                                lat = locationData!!.lat,
+                                lon = locationData!!.lon,
+                                cityName = locationData!!.cityName,
+                                tempUnit = tempUnit,
+                                onBackgroundChange = { bg -> currentBackgroundData = bg },
+                                onContentReady = { isWeatherReady = true },
+                                onDayClick = { day ->
+                                    selectedDay = day
+                                    showDetailSheet = true
+                                }
                             )
                         }
-                        else -> { /* Các tab khác mở màn hình riêng nên chỗ này rỗng */ }
+                        else -> {}
                     }
                 }
 
@@ -135,10 +152,9 @@ fun MainScreen(
                             selectedTab = selectedTab,
                             onTabSelected = { tab ->
                                 when (tab) {
-                                    // ✅ CHUYỂN MÀN HÌNH TẠI ĐÂY
                                     MainTab.SETTINGS -> onOpenSettings()
                                     MainTab.COMMUNITY -> onOpenCommunityChat()
-                                    MainTab.SEARCH -> onOpenSearch() // <--- Mở màn hình tìm kiếm riêng
+                                    MainTab.SEARCH -> onOpenSearch()
                                     else -> selectedTab = tab
                                 }
                             },
@@ -151,12 +167,30 @@ fun MainScreen(
             }
         }
 
-        // Floating UI (SOS, Dialogs)
-        FloatingActionButton(
-            onClick = { showSOSDialog = true }, containerColor = Color(0xFFEF5350), contentColor = Color.White, shape = CircleShape,
-            modifier = Modifier.align(Alignment.TopEnd).padding(top = 50.dp, end = 20.dp).size(50.dp)
-        ) { Icon(Icons.Default.Warning, contentDescription = "SOS") }
+        // Floating UI Buttons
+        androidx.compose.animation.AnimatedVisibility(
+            visible = isWeatherReady,
+            enter = androidx.compose.animation.scaleIn() + androidx.compose.animation.fadeIn(), // Hiệu ứng phóng to + hiện dần
+            exit = androidx.compose.animation.scaleOut() + androidx.compose.animation.fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd) // Căn khung hình động xuống góc dưới phải
+                .padding(
+                    bottom = 130.dp,
+                    end = 28.dp
+                )
+        ) {
+            FloatingActionButton(
+                onClick = { showSOSDialog = true },
+                containerColor = Color(0xFFEF5350),
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.size(56.dp)
+            ) {
+                Icon(Icons.Default.Warning, contentDescription = "SOS")
+            }
+        }
 
+        // Dialogs & Sheets
         if (showSOSDialog && locationData != null) {
             SOSDialog(dataStore, networkMonitor, locationData!!.lat, locationData!!.lon, { showSOSDialog = false })
         }
@@ -165,10 +199,18 @@ fun MainScreen(
                 SOSMonitorScreen(onBack = { showRescueMonitor = false })
             }
         }
+
+        // ✅ GỌI WEATHER DETAIL BOTTOM SHEET TỪ FILE DailyForecast.kt
+        if (showDetailSheet && selectedDay != null) {
+            WeatherDetailBottomSheet(
+                day = selectedDay!!,
+                unit = tempUnit,
+                onDismiss = { showDetailSheet = false }
+            )
+        }
     }
 }
 
-// UI Thanh trạng thái mạng
 @Composable
 fun NetworkStatusHeader(isOnline: Boolean, queueSize: Int) {
     val bgColor = if (isOnline) Color(0xFF4CAF50) else Color(0xFF616161)
@@ -179,44 +221,137 @@ fun NetworkStatusHeader(isOnline: Boolean, queueSize: Int) {
     }
 }
 
-// Content Thời tiết (Vị trí hiện tại)
+// -------------------------------------------------------------
+// LOGIC XỬ LÝ DỮ LIỆU & GỌI CÁC COMPONENT CON TỪ FILE RIÊNG
+// -------------------------------------------------------------
 @Composable
-fun WeatherContent(lat: Double, lon: Double, cityName: String, tempUnit: String, onBackgroundChange: (WeatherBackground) -> Unit, onContentReady: () -> Unit = {}) {
+fun WeatherContentV2(
+    lat: Double,
+    lon: Double,
+    cityName: String,
+    tempUnit: String,
+    onBackgroundChange: (WeatherBackground) -> Unit,
+    onContentReady: () -> Unit,
+    onDayClick: (DailyDisplayItem) -> Unit // Callback mở BottomSheet
+) {
     var weatherData by remember { mutableStateOf<WeatherUIData?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorText by remember { mutableStateOf<String?>(null) }
+
     fun convertTemp(c: Double): Int = if (tempUnit == "F") (c * 1.8 + 32).roundToInt() else c.roundToInt()
 
     LaunchedEffect(lat, lon, tempUnit) {
         isLoading = true; errorText = null
         try {
             val response = RetrofitClient.api.getWeather(lat, lon)
-            val current = response.current; val daily = response.daily; val hourly = response.hourly; val isDay = current.isDay == 1
-            val currentDisplay = CurrentDisplayData(cityName, convertTemp(current.temperature), WeatherUtils.getDescriptionByCode(current.weatherCode), convertTemp(daily.maxTemperatures.first()), convertTemp(daily.minTemperatures.first()), isDay)
+            val current = response.current
+            val daily = response.daily
+            val hourly = response.hourly
+            val isDay = current.isDay == 1
+
+            // 1. Xử lý Current
+            val currentDisplay = CurrentDisplayData(
+                cityName,
+                convertTemp(current.temperature),
+                WeatherUtils.getDescriptionByCode(current.weatherCode),
+                convertTemp(daily.maxTemperatures.first()),
+                convertTemp(daily.minTemperatures.first()),
+                isDay
+            )
+
+            // 2. Xử lý Hourly (Mapping sang HourlyDisplayItem của file HourlyForecast.kt)
             val currentHour = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH")).toInt()
             val startIndex = hourly.time.indexOfFirst { it.substring(11, 13).toInt() >= currentHour }.let { if (it != -1) it else 0 }
+
             val hourlyList = mutableListOf<HourlyDisplayItem>()
             for (i in startIndex until startIndex + 24) {
                 if (i >= hourly.time.size) break
                 val hourLabel = if (i == startIndex) "Bây giờ" else hourly.time[i].substring(11, 13) + "h"
-                val isHourDay = hourly.isDayList[i] == 1
-                hourlyList.add(HourlyDisplayItem(hourLabel, WeatherUtils.getWeatherIcon(hourly.weatherCodes[i], isHourDay), convertTemp(hourly.temperatures[i])))
+                val isHourDay = hourly.isDayList?.getOrNull(i) == 1 || (hourly.time[i].substring(11,13).toInt() in 6..18)
+
+                hourlyList.add(HourlyDisplayItem(
+                    time = hourLabel,
+                    icon = WeatherUtils.getWeatherIcon(hourly.weatherCodes[i], isHourDay),
+                    temp = convertTemp(hourly.temperatures[i])
+                ))
             }
+
+            // 3. Chuẩn bị Map cho biểu đồ chi tiết (quan trọng để Chart vẽ đúng)
+            val hourlyTempsByDate = mutableMapOf<String, MutableList<Int>>()
+            val hourlyCodesByDate = mutableMapOf<String, MutableList<Int>>()
+            hourly.time.forEachIndexed { idx, timeStr ->
+                val dateKey = timeStr.substring(0, 10)
+                hourlyTempsByDate.getOrPut(dateKey) { mutableListOf() }.add(convertTemp(hourly.temperatures[idx]))
+                hourlyCodesByDate.getOrPut(dateKey) { mutableListOf() }.add(hourly.weatherCodes[idx])
+            }
+
+            // 4. Xử lý Daily (Mapping sang DailyDisplayItem của file DailyForecast.kt)
+            val dailyItems = mutableListOf<DailyDisplayItem>()
+            val viLocale = Locale("vi", "VN")
+            val dayFormatter = DateTimeFormatter.ofPattern("E", viLocale)
+
+            daily.time.forEachIndexed { index, dateStr ->
+                val localDate = LocalDate.parse(dateStr)
+                val label = when (index) {
+                    0 -> "Hôm nay"
+                    1 -> "Ngày mai"
+                    else -> dayFormatter.format(localDate)
+                }
+
+                dailyItems.add(DailyDisplayItem(
+                    dayLabel = label,
+                    dateLabel = formatDateShort(dateStr),
+                    icon = WeatherUtils.getWeatherIcon(daily.weatherCodes[index], true),
+                    minTemp = convertTemp(daily.minTemperatures[index]),
+                    maxTemp = convertTemp(daily.maxTemperatures[index]),
+                    rainProbability = daily.rainProbabilities?.getOrNull(index),
+                    rainSumMm = daily.rainSums?.getOrNull(index),
+                    hourlyTemps = hourlyTempsByDate[dateStr] ?: emptyList(),
+                    hourlyWeatherCodes = hourlyCodesByDate[dateStr] ?: emptyList()
+                ))
+            }
+
             val summary = WeatherUtils.generateSummaryText(hourly.weatherCodes, hourly.windGusts)
             onBackgroundChange(WeatherUtils.getBackgroundData(current.weatherCode, isDay))
-            weatherData = WeatherUIData(currentDisplay, hourlyList, summary)
+
+            weatherData = WeatherUIData(currentDisplay, hourlyList, dailyItems, summary)
+
         } catch (e: Exception) { errorText = "Lỗi: ${e.message}" } finally { isLoading = false; onContentReady() }
     }
 
+    // --- RENDER CONTENT ---
     Box(Modifier.fillMaxSize()) {
         if (isLoading) CircularProgressIndicator(Modifier.align(Alignment.Center), Color.White)
         else if (errorText != null) Text(errorText!!, color = Color.White, modifier = Modifier.align(Alignment.Center))
         else weatherData?.let { data ->
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 24.dp, bottom = 100.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // 1. Current Weather
                 MainWeatherDisplay(data.current, tempUnit)
-                Spacer(Modifier.height(40.dp))
-                HourlyForecastSection(data.summary, data.hourly, tempUnit)
-                Spacer(Modifier.height(50.dp))
+
+                Spacer(Modifier.height(24.dp))
+
+                // 2. HOURLY FORECAST
+                HourlyForecastSection(
+                    summaryText = data.summary,
+                    hourlyData = data.hourly,
+                    unit = tempUnit
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                // 3. DAILY FORECAST
+                DailyForecastSection(
+                    items = data.daily,
+                    unit = tempUnit,
+                    onDayClick = onDayClick
+                )
             }
         }
     }
