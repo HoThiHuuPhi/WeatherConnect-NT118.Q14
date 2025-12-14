@@ -82,5 +82,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.0.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     implementation("androidx.activity:activity-compose:1.8.2")
-
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("io.coil-kt:coil-compose:2.4.0")
+    implementation("com.google.code.gson:gson:2.11.0")
 }

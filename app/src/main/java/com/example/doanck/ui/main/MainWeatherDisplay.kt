@@ -1,6 +1,5 @@
 package com.example.doanck.ui.main
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -11,13 +10,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.doanck.ui.theme.DoAnCKTheme
 import com.example.doanck.ui.theme.SFProDisplay
 
-
+// --- KHAI BÁO CLASS DỮ LIỆU (Để sửa lỗi Unresolved reference 'CurrentDisplayData') ---
 data class CurrentDisplayData(
     val cityName: String,
     val currentTemp: Int,
@@ -27,6 +24,7 @@ data class CurrentDisplayData(
     val isDay: Boolean
 )
 
+// --- KHAI BÁO STYLE CHỮ (Để sửa lỗi Unresolved reference 'SoftShadowTextStyle') ---
 private val SoftShadowTextStyle = TextStyle(
     shadow = Shadow(
         color = Color.Black.copy(alpha = 0.8f),
@@ -36,13 +34,17 @@ private val SoftShadowTextStyle = TextStyle(
 )
 
 @Composable
-fun MainWeatherDisplay(data: CurrentDisplayData) {
+fun MainWeatherDisplay(
+    data: CurrentDisplayData,
+    unit: String // Tham số đơn vị (C hoặc F)
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 120.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Tên thành phố
         Text(
             text = data.cityName,
             color = Color.White,
@@ -54,6 +56,7 @@ fun MainWeatherDisplay(data: CurrentDisplayData) {
 
         Spacer(modifier = Modifier.height(4.dp))
 
+        // Nhiệt độ
         Row(
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.Center
@@ -68,7 +71,7 @@ fun MainWeatherDisplay(data: CurrentDisplayData) {
             )
 
             Text(
-                text = "°",
+                text = "°$unit",
                 color = Color.White,
                 fontSize = 120.sp,
                 fontFamily = SFProDisplay,
@@ -79,6 +82,7 @@ fun MainWeatherDisplay(data: CurrentDisplayData) {
 
         Spacer(modifier = Modifier.height(4.dp))
 
+        // Mô tả
         Text(
             text = data.description,
             color = Color.White,
@@ -90,36 +94,14 @@ fun MainWeatherDisplay(data: CurrentDisplayData) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // Max - Min
         Text(
-            text = "C:${data.maxTemp}° T:${data.minTemp}°",
+            text = "C:${data.maxTemp}°$unit  T:${data.minTemp}°$unit",
             color = Color.White.copy(alpha = 0.8f),
             fontSize = 20.sp,
             fontFamily = SFProDisplay,
             fontWeight = FontWeight.Medium,
             style = SoftShadowTextStyle
         )
-    }
-}
-
-@Preview
-@Composable
-fun MainWeatherDisplayPreview() {
-    val mockData = CurrentDisplayData(
-        cityName = "Hồ Chí Minh",
-        currentTemp = 32,
-        description = "Chủ yếu nắng",
-        maxTemp = 35,
-        minTemp = 25,
-        isDay = true
-    )
-
-    DoAnCKTheme {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFFB3E5FC))
-        ) {
-            MainWeatherDisplay(data = mockData)
-        }
     }
 }

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -33,9 +34,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.doanck.data.datastore.AppDataStore
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.isActive
-import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 // --- HỆ THỐNG MÂY BAY ---
@@ -47,26 +49,27 @@ data class CloudParticle(
     val alpha: Float
 )
 
-// Màu sắc chủ đạo cho theme sáng
 val LightBlueSky = Color(0xFF87CEEB)
 val LightGoldenSun = Color(0xFFFDB813)
-val TextDarkBlue = Color(0xFF1E3A8A) // Màu chữ tối để dễ đọc
+val TextDarkBlue = Color(0xFF1E3A8A)
 val GlassBorderLight = Color(0xFFFFFFFF).copy(alpha = 0.5f)
 
 @Composable
 fun LoginScreen(
+    appDataStore: AppDataStore,                 // ✅ THÊM
     onLoginSuccess: () -> Unit,
     onNavigateToRegister: () -> Unit,
     onNavigateToForgotPassword: () -> Unit
 ) {
     val auth = FirebaseAuth.getInstance()
+    val scope = rememberCoroutineScope()         // ✅ THÊM
+
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
 
-    // Animation xuất hiện
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { isVisible = true }
 
@@ -74,12 +77,11 @@ fun LoginScreen(
     val screenWidth = with(LocalDensity.current) { configuration.screenWidthDp.dp.toPx() }
     val screenHeight = with(LocalDensity.current) { configuration.screenHeightDp.dp.toPx() }
 
-    // Tạo danh sách các đám mây
     val clouds = remember {
-        List(8) { // Số lượng mây
+        List(8) {
             CloudParticle(
                 x = Random.nextFloat() * screenWidth,
-                y = Random.nextFloat() * (screenHeight / 2), // Mây chỉ bay ở nửa trên
+                y = Random.nextFloat() * (screenHeight / 2),
                 speed = Random.nextFloat() * 2f + 0.5f,
                 scale = Random.nextFloat() * 0.5f + 0.8f,
                 alpha = Random.nextFloat() * 0.3f + 0.6f
@@ -87,15 +89,13 @@ fun LoginScreen(
         }
     }
 
-    // Loop animation cho mây bay
     var time by remember { mutableLongStateOf(0L) }
     LaunchedEffect(Unit) {
         while (isActive) {
             withFrameNanos {
                 time = it
                 clouds.forEach { cloud ->
-                    cloud.x -= cloud.speed // Bay từ phải sang trái
-                    // Nếu bay hết màn hình thì reset lại về bên phải
+                    cloud.x -= cloud.speed
                     if (cloud.x < -200f * cloud.scale) {
                         cloud.x = screenWidth + 200f * cloud.scale
                     }
@@ -104,11 +104,13 @@ fun LoginScreen(
         }
     }
 
-    // Animation cho mặt trời tỏa sáng nhẹ
     val infiniteTransition = rememberInfiniteTransition(label = "sun")
     val sunScale by infiniteTransition.animateFloat(
         initialValue = 1f, targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(tween(3000, easing = EaseInOut), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(
+            tween(3000, easing = EaseInOut),
+            RepeatMode.Reverse
+        ),
         label = "sunScale"
     )
 
@@ -116,22 +118,18 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                // Gradient bầu trời nắng: Xanh da trời -> Vàng nhạt
                 Brush.verticalGradient(
                     listOf(LightBlueSky, Color(0xFFB0E0E6), Color(0xFFFFFACD))
                 )
             )
     ) {
-        // 1. Vẽ Mặt Trời và Mây (Canvas)
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val trigger = time // Kích hoạt vẽ lại
+            val trigger = time
 
-            // Vẽ Mặt Trời tỏa sáng ở góc trên phải
             val sunCenterX = size.width * 0.85f
             val sunCenterY = size.height * 0.15f
             val sunRadius = 60.dp.toPx() * sunScale
 
-            // Vòng sáng ngoài (Hào quang)
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(LightGoldenSun.copy(alpha = 0.6f), Color.Transparent),
@@ -141,21 +139,17 @@ fun LoginScreen(
                 center = Offset(sunCenterX, sunCenterY),
                 radius = sunRadius * 2
             )
-            // Lõi mặt trời
             drawCircle(
                 color = LightGoldenSun,
                 center = Offset(sunCenterX, sunCenterY),
                 radius = sunRadius
             )
 
-            // Vẽ các đám mây
             clouds.forEach { cloud ->
-                // Hàm vẽ một đám mây đơn giản bằng các hình tròn
                 drawCloud(offset = Offset(cloud.x, cloud.y), scale = cloud.scale, alpha = cloud.alpha)
             }
         }
 
-        // 2. Nội dung chính (Card đăng nhập)
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -172,14 +166,14 @@ fun LoginScreen(
                         "WEATHER",
                         fontSize = 32.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = TextDarkBlue, // Chữ màu tối
+                        color = TextDarkBlue,
                         letterSpacing = 4.sp
                     )
                     Text(
                         "CONNECT",
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Light,
-                        color = Color(0xFFF59E0B), // Màu vàng cam nắng
+                        color = Color(0xFFF59E0B),
                         letterSpacing = 4.sp
                     )
                     Spacer(Modifier.height(40.dp))
@@ -188,12 +182,13 @@ fun LoginScreen(
 
             AnimatedVisibility(
                 visible = isVisible,
-                enter = slideInVertically(initialOffsetY = { 100 }, animationSpec = tween(500, delayMillis = 300)) + fadeIn(tween(1000, delayMillis = 300))
+                enter = slideInVertically(
+                    initialOffsetY = { 100 },
+                    animationSpec = tween(500, delayMillis = 300)
+                ) + fadeIn(tween(1000, delayMillis = 300))
             ) {
-                // ★ BRIGHT GLASS CARD ★ (Kính sáng)
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    // Nền trắng mờ
                     colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.4f)),
                     shape = RoundedCornerShape(24.dp),
                     elevation = CardDefaults.cardElevation(0.dp)
@@ -201,7 +196,6 @@ fun LoginScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            // Viền trắng sáng
                             .border(
                                 width = 1.dp,
                                 brush = Brush.linearGradient(
@@ -213,7 +207,6 @@ fun LoginScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
-                            // Input Email (Dùng phiên bản Light)
                             CustomTextFieldLight(
                                 value = email,
                                 onValueChange = { email = it },
@@ -223,7 +216,6 @@ fun LoginScreen(
 
                             Spacer(Modifier.height(16.dp))
 
-                            // Input Password (Dùng phiên bản Light)
                             CustomTextFieldLight(
                                 value = password,
                                 onValueChange = { password = it },
@@ -234,27 +226,26 @@ fun LoginScreen(
                                 onTogglePassword = { passwordVisible = !passwordVisible }
                             )
 
-                            // Forgot Password Link
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.End
                             ) {
                                 TextButton(onClick = onNavigateToForgotPassword) {
-                                    // Màu chữ link tối hơn
                                     Text("Quên mật khẩu?", color = Color(0xFF4F46E5), fontSize = 13.sp)
                                 }
                             }
 
                             Spacer(Modifier.height(16.dp))
 
-                            // Error Message
                             error?.let {
                                 Text(it, color = Color(0xFFDC2626), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.height(12.dp))
                             }
 
-                            // Login Button (Gradient màu nắng: Cam -> Vàng)
-                            val buttonScale by animateFloatAsState(targetValue = if (loading) 0.95f else 1f, label = "btn")
+                            val buttonScale by animateFloatAsState(
+                                targetValue = if (loading) 0.95f else 1f,
+                                label = "btn"
+                            )
 
                             Button(
                                 onClick = {
@@ -264,11 +255,25 @@ fun LoginScreen(
                                     }
                                     loading = true
                                     error = null
+
                                     auth.signInWithEmailAndPassword(email.trim(), password)
                                         .addOnCompleteListener { task ->
                                             loading = false
-                                            if (task.isSuccessful) onLoginSuccess()
-                                            else error = task.exception?.message
+                                            if (task.isSuccessful) {
+                                                val user = auth.currentUser
+                                                if (user != null) {
+                                                    // ✅ LƯU CURRENT UID/EMAIL
+                                                    scope.launch {
+                                                        appDataStore.setCurrentUser(
+                                                            uid = user.uid,
+                                                            email = user.email ?: email.trim()
+                                                        )
+                                                    }
+                                                }
+                                                onLoginSuccess()
+                                            } else {
+                                                error = task.exception?.message
+                                            }
                                         }
                                 },
                                 modifier = Modifier
@@ -283,7 +288,6 @@ fun LoginScreen(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .background(
-                                            // Gradient Nắng: Cam -> Vàng rực
                                             Brush.horizontalGradient(
                                                 listOf(Color(0xFFF59E0B), Color(0xFFFBBF24))
                                             )
@@ -301,7 +305,6 @@ fun LoginScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            // Footer Text
             AnimatedVisibility(
                 visible = isVisible,
                 enter = fadeIn(tween(1000, delayMillis = 600))
@@ -317,7 +320,6 @@ fun LoginScreen(
     }
 }
 
-// Hàm vẽ đám mây đơn giản
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCloud(
     offset: Offset,
     scale: Float,
@@ -326,13 +328,11 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCloud(
     val cloudColor = Color.White.copy(alpha = alpha)
     val baseRadius = 30.dp.toPx() * scale
 
-    // Vẽ 3 hình tròn chồng lên nhau để tạo hình đám mây
     drawCircle(color = cloudColor, radius = baseRadius, center = offset)
     drawCircle(color = cloudColor, radius = baseRadius * 0.8f, center = Offset(offset.x - baseRadius * 0.7f, offset.y + baseRadius * 0.2f))
     drawCircle(color = cloudColor, radius = baseRadius * 0.9f, center = Offset(offset.x + baseRadius * 0.7f, offset.y + baseRadius * 0.1f))
 }
 
-// Custom TextField cho nền sáng (Chữ màu tối)
 @Composable
 fun CustomTextFieldLight(
     value: String,
@@ -344,7 +344,7 @@ fun CustomTextFieldLight(
     onTogglePassword: () -> Unit = {}
 ) {
     val contentColor = TextDarkBlue.copy(alpha = 0.8f)
-    val focusColor = Color(0xFFF59E0B) // Màu cam nắng khi focus
+    val focusColor = Color(0xFFF59E0B)
 
     OutlinedTextField(
         value = value,
@@ -371,9 +371,9 @@ fun CustomTextFieldLight(
             focusedBorderColor = focusColor,
             unfocusedBorderColor = contentColor.copy(alpha = 0.3f),
             cursorColor = focusColor,
-            focusedTextColor = TextDarkBlue, // Chữ màu tối
+            focusedTextColor = TextDarkBlue,
             unfocusedTextColor = TextDarkBlue,
-            focusedContainerColor = Color.White.copy(alpha = 0.3f), // Nền input sáng hơn
+            focusedContainerColor = Color.White.copy(alpha = 0.3f),
             unfocusedContainerColor = Color.White.copy(alpha = 0.3f)
         )
     )

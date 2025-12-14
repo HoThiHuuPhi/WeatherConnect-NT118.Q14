@@ -20,14 +20,15 @@ import com.example.doanck.ui.theme.SFProDisplay
 
 data class HourlyDisplayItem(
     val time: String,
-    val icon: Int,       // 🔥 đổi thành drawable resource ID
+    val icon: Int,
     val temp: Int
 )
 
 @Composable
 fun HourlyForecastSection(
     summaryText: String,
-    hourlyData: List<HourlyDisplayItem>
+    hourlyData: List<HourlyDisplayItem>,
+    unit: String // <--- THAM SỐ MỚI
 ) {
     Box(
         modifier = Modifier
@@ -56,7 +57,7 @@ fun HourlyForecastSection(
 
             LazyRow(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 items(hourlyData) { item ->
-                    HourlyItem(item)
+                    HourlyItem(item, unit) // <--- TRUYỀN UNIT XUỐNG
                 }
             }
         }
@@ -64,7 +65,7 @@ fun HourlyForecastSection(
 }
 
 @Composable
-fun HourlyItem(item: HourlyDisplayItem) {
+fun HourlyItem(item: HourlyDisplayItem, unit: String) { // <--- NHẬN UNIT
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -79,7 +80,6 @@ fun HourlyItem(item: HourlyDisplayItem) {
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // 🔥 Icon bằng drawable
         Image(
             painter = painterResource(id = item.icon),
             contentDescription = null,
@@ -89,7 +89,7 @@ fun HourlyItem(item: HourlyDisplayItem) {
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = "${item.temp}°",
+            text = "${item.temp}°$unit", // <--- HIỂN THỊ ĐƠN VỊ
             color = Color.White,
             fontSize = 20.sp,
             fontWeight = FontWeight.Normal,
