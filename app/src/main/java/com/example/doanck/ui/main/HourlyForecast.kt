@@ -24,8 +24,6 @@ data class HourlyDisplayItem(
     val temp: Int
 )
 
-private val HourlyGlassDark = Color(0xFF020617).copy(alpha = 0.60f)
-
 @Composable
 fun HourlyForecastSection(
     summaryText: String,
@@ -37,7 +35,7 @@ fun HourlyForecastSection(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 20.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(HourlyGlassDark)
+            .background(Color(0xFF262C42).copy(alpha = 0.8f))
             .padding(16.dp)
     ) {
         Column {

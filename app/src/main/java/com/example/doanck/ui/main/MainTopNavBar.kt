@@ -26,9 +26,6 @@ enum class MainTab {
     SETTINGS
 }
 
-private val GlassDark = Color(0xFF020617).copy(alpha = 0.55f)   // navy rất đậm + alpha
-private val GlassBorder = Color.White.copy(alpha = 0.45f)
-
 @Composable
 fun MainTopNavBar(
     selectedTab: MainTab,
@@ -42,56 +39,13 @@ fun MainTopNavBar(
             .padding(horizontal = 40.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-
-        var mapMenuExpanded by remember { mutableStateOf(false) }
-
-        Box {
-            Surface(
-                onClick = { mapMenuExpanded = true },
-                shape = CircleShape,
-                color = GlassDark,                               // 🔵 cùng tông
-                tonalElevation = 0.dp,
-                shadowElevation = 0.dp,
-                modifier = Modifier.size(60.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Image(
-                        painter = painterResource(id = R.drawable.map),
-                        contentDescription = "Bản đồ",
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-
-            DropdownMenu(
-                expanded = mapMenuExpanded,
-                onDismissRequest = { mapMenuExpanded = false }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Bản đồ thời tiết") },
-                    onClick = {
-                        mapMenuExpanded = false
-                        onOpenWeatherMap()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Bản đồ cứu trợ") },
-                    onClick = {
-                        mapMenuExpanded = false
-                        onOpenRescueMap()
-                    }
-                )
-            }
-        }
-
-        Spacer(Modifier.width(8.dp))
-
         Surface(
             modifier = Modifier
                 .weight(1f)
-                .height(60.dp),
+                .height(56.dp),
             shape = RoundedCornerShape(999.dp),
-            color = GlassDark,                               // 🔵 glass tối
+            color = Color.White.copy(alpha = 0.18f),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
             tonalElevation = 0.dp,
             shadowElevation = 0.dp
         ) {
@@ -126,9 +80,53 @@ fun MainTopNavBar(
                 ) { onTabSelected(MainTab.SETTINGS) }
             }
         }
+
+        Spacer(Modifier.width(12.dp))
+
+        // ------- Nút map kính mờ -------
+        var mapMenuExpanded by remember { mutableStateOf(false) }
+
+        Box {
+            Surface(
+                onClick = { mapMenuExpanded = true },
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.15f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp,
+                modifier = Modifier.size(56.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Image(
+                        painter = painterResource(id = R.drawable.map),
+                        contentDescription = "Bản đồ",
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            DropdownMenu(
+                expanded = mapMenuExpanded,
+                onDismissRequest = { mapMenuExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Bản đồ thời tiết") },
+                    onClick = {
+                        mapMenuExpanded = false
+                        onOpenWeatherMap()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Bản đồ cứu trợ") },
+                    onClick = {
+                        mapMenuExpanded = false
+                        onOpenRescueMap()
+                    }
+                )
+            }
+        }
     }
 }
-
 
 
 @Composable
@@ -156,12 +154,12 @@ private fun NavPillItem(
             Image(
                 painter = painterResource(id = iconRes),
                 contentDescription = null,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(22.dp)
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = label,
-                color = Color.White.copy(alpha = 0.96f),   // 🔥 gần trắng
+                color = Color.White.copy(alpha = 0.9f),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -169,10 +167,9 @@ private fun NavPillItem(
     }
 }
 
-
 @Preview(
     showBackground = true,
-    backgroundColor = 0xFF37474F,
+    backgroundColor = 0xFF101018,
     widthDp = 390,
     heightDp = 200
 )
@@ -183,7 +180,7 @@ fun MainBottomBarPreview() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF455A64))
+            .background(Color(0xFF101018))
     ) {
         Column(
             modifier = Modifier.fillMaxSize()
