@@ -3,6 +3,9 @@ package com.example.doanck.data.datastore
 import android.content.Context
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.doanck.data.model.PendingSOS // 🟢 MỚI: Import model SOS
+import com.google.gson.Gson // 🟢 MỚI: Import Gson
+import com.google.gson.reflect.TypeToken // 🟢 MỚI: Để xử lý List
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -11,6 +14,8 @@ private val Context.dataStore by preferencesDataStore(name = "app_settings")
 
 class AppDataStore(private val context: Context) {
 
+    private val gson = Gson() // 🟢 MỚI: Khởi tạo Gson
+
     companion object {
         val ENABLE_ANIMATION = booleanPreferencesKey("enable_animation")
         val TEMP_UNIT = stringPreferencesKey("temp_unit")
@@ -18,6 +23,9 @@ class AppDataStore(private val context: Context) {
         // ✅ Session hiện tại
         val CURRENT_UID = stringPreferencesKey("current_uid")
         val CURRENT_EMAIL = stringPreferencesKey("current_email")
+
+        // 🟢 MỚI: Key lưu danh sách SOS chờ gửi (Lưu dạng chuỗi JSON)
+        val SOS_QUEUE_KEY = stringPreferencesKey("sos_queue_json")
     }
 
     // ==========================================
@@ -44,7 +52,6 @@ class AppDataStore(private val context: Context) {
         .catch { emit(emptyPreferences()) }
         .map { it[CURRENT_EMAIL] ?: "" }
 
-    // Lấy Avatar của user đang đăng nhập
     val userAvatar: Flow<String?> = context.dataStore.data
         .catch { emit(emptyPreferences()) }
         .map { prefs ->
@@ -52,7 +59,6 @@ class AppDataStore(private val context: Context) {
             if (uid.isBlank()) null else prefs[avatarKey(uid)]
         }
 
-    // Lấy Ngày sinh (Mặc định 01/01/2000 nếu chưa có)
     val userDob: Flow<String> = context.dataStore.data
         .catch { emit(emptyPreferences()) }
         .map { prefs ->
@@ -60,7 +66,6 @@ class AppDataStore(private val context: Context) {
             if (uid.isBlank()) "01/01/2000" else prefs[dobKey(uid)] ?: "01/01/2000"
         }
 
-    // Lấy SĐT (Mặc định "Chưa cập nhật")
     val userPhone: Flow<String> = context.dataStore.data
         .catch { emit(emptyPreferences()) }
         .map { prefs ->
@@ -68,12 +73,24 @@ class AppDataStore(private val context: Context) {
             if (uid.isBlank()) "Chưa cập nhật" else prefs[phoneKey(uid)] ?: "Chưa cập nhật"
         }
 
-    // Lấy Giới tính (Mặc định "Nam")
     val userGender: Flow<String> = context.dataStore.data
         .catch { emit(emptyPreferences()) }
         .map { prefs ->
             val uid = prefs[CURRENT_UID].orEmpty()
             if (uid.isBlank()) "Nam" else prefs[genderKey(uid)] ?: "Nam"
+        }
+
+    // 🟢 MỚI: Đọc danh sách SOS đang chờ (từ JSON -> List)
+    val sosQueue: Flow<List<PendingSOS>> = context.dataStore.data
+        .catch { emit(emptyPreferences()) }
+        .map { prefs ->
+            val json = prefs[SOS_QUEUE_KEY] ?: "[]"
+            val type = object : TypeToken<List<PendingSOS>>() {}.type
+            try {
+                gson.fromJson(json, type)
+            } catch (e: Exception) {
+                emptyList() // Tránh crash nếu JSON lỗi
+            }
         }
 
     // ==========================================
@@ -88,7 +105,6 @@ class AppDataStore(private val context: Context) {
         context.dataStore.edit { it[TEMP_UNIT] = unit }
     }
 
-    /** ✅ Gọi sau khi login thành công */
     suspend fun setCurrentUser(uid: String, email: String) {
         context.dataStore.edit {
             it[CURRENT_UID] = uid
@@ -96,7 +112,6 @@ class AppDataStore(private val context: Context) {
         }
     }
 
-    /** ✅ Lưu avatar cho user hiện tại */
     suspend fun saveAvatarForCurrentUser(uri: String) {
         context.dataStore.edit { prefs ->
             val uid = prefs[CURRENT_UID].orEmpty()
@@ -106,7 +121,6 @@ class AppDataStore(private val context: Context) {
         }
     }
 
-    /** ✅ Lưu thông tin cá nhân cho user hiện tại */
     suspend fun saveDob(dob: String) {
         context.dataStore.edit { prefs ->
             val uid = prefs[CURRENT_UID].orEmpty()
@@ -128,11 +142,33 @@ class AppDataStore(private val context: Context) {
         }
     }
 
-    /** ✅ Logout: chỉ xóa session */
     suspend fun clearSession() {
         context.dataStore.edit {
             it.remove(CURRENT_UID)
             it.remove(CURRENT_EMAIL)
+        }
+    }
+
+    // 🟢 MỚI: Thêm SOS vào hàng chờ (Lưu Offline)
+    suspend fun addToQueue(sos: PendingSOS) {
+        context.dataStore.edit { prefs ->
+            val json = prefs[SOS_QUEUE_KEY] ?: "[]"
+            val type = object : TypeToken<List<PendingSOS>>() {}.type
+            val currentList: MutableList<PendingSOS> = try {
+                gson.fromJson(json, type)
+            } catch (e: Exception) {
+                mutableListOf()
+            }
+
+            currentList.add(sos) // Thêm tin mới vào
+            prefs[SOS_QUEUE_KEY] = gson.toJson(currentList) // Lưu lại thành JSON
+        }
+    }
+
+    // 🟢 MỚI: Xóa sạch hàng chờ (Sau khi đã gửi online thành công)
+    suspend fun clearQueue() {
+        context.dataStore.edit { prefs ->
+            prefs[SOS_QUEUE_KEY] = "[]"
         }
     }
 }

@@ -1,6 +1,21 @@
 package com.example.doanck.utils
 
 import com.example.doanck.R
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 
 enum class WeatherEffectType {
@@ -127,58 +142,329 @@ object WeatherUtils {
 
     fun getBackgroundData(code: Int, isDay: Boolean): WeatherBackground {
         return when (code) {
-            // 0: Clear sky
+
+            // ================= TRỜI QUANG (CLEAR) =================
+            // 0: Trời quang đãng (Clear Sky)
             0 -> if (isDay) {
                 WeatherBackground(
                     effectType = WeatherEffectType.SUNNY,
-                    gradientStartColor = 0xFF4A90E2, // Xanh trời
-                    gradientEndColor = 0xFF8AC7FF // Xanh nhạt
+                    gradientStartColor = 0xFF1E88E5, // Xanh dương đậm chuẩn iOS
+                    gradientEndColor = 0xFF6DD5FA  // Xanh cyan sáng
                 )
             } else {
                 WeatherBackground(
                     effectType = WeatherEffectType.STARRY_NIGHT,
-                    gradientStartColor = 0xFF0A1F44, // Xanh đêm đậm
-                    gradientEndColor = 0xFF1B3B6F // Xanh đêm nhạt
+                    gradientStartColor = 0xFF0B1026, // Đen xanh sâu
+                    gradientEndColor = 0xFF2B32B2  // Tím than nhẹ
                 )
             }
-            // 1, 2, 3, 45, 48: Cloudy, Overcast, Fog (Mây và Sương)
-            1, 2, 3, 45, 48 -> if (isDay) {
+
+            // ================= CÓ MÂY (CLOUDS) =================
+            // 1: Ít mây (Mainly Clear) - Nhạt hơn 0 một chút
+            1 -> if (isDay) {
                 WeatherBackground(
                     effectType = WeatherEffectType.CLOUDY,
-                    gradientStartColor = 0xFF607D8B, // Xám
-                    gradientEndColor = 0xFFB0BEC5 // Xám nhạt
+                    gradientStartColor = 0xFF4A90E2,
+                    gradientEndColor = 0xFF93C6F9
                 )
             } else {
                 WeatherBackground(
-                    effectType = WeatherEffectType.CLOUDY, // Mây đêm
-                    gradientStartColor = 0xFF263238, // Xám đêm
-                    gradientEndColor = 0xFF455A64 // Xám đen
+                    effectType = WeatherEffectType.CLOUDY,
+                    gradientStartColor = 0xFF141E30,
+                    gradientEndColor = 0xFF243B55
                 )
             }
-            // 51, 53, 55, 61, 63, 65, 80, 81, 82: Drizzle, Rain, Rain Showers
-            in 51..55, in 61..65, in 80..82 -> WeatherBackground(
-                effectType = WeatherEffectType.RAIN,
-                gradientStartColor = 0xFF1C2D43, // Xanh đen mưa
-                gradientEndColor = 0xFF3E506B
-            )
-            // 56, 57, 66, 67, 71, 73, 75, 77, 85, 86: Freezing Drizzle/Rain, Snow, Snow Grains, Snow Showers
-            in 56..57, in 66..67, in 71..79, in 85..86 -> WeatherBackground(
-                effectType = WeatherEffectType.SNOW,
-                gradientStartColor = 0xFF90A4AE,
-                gradientEndColor = 0xFFCFD8DC
-            )
-            // 95, 96, 99: Thunderstorm, Thunderstorm with Hail
-            in 95..99 -> WeatherBackground(
-                effectType = WeatherEffectType.STORM,
-                gradientStartColor = 0xFF000000, // Đen bão
-                gradientEndColor = 0xFF303030 // Xám đậm
+
+            // 2: Mây rải rác (Partly Cloudy) - Bắt đầu có sắc xám
+            2 -> if (isDay) {
+                WeatherBackground(
+                    effectType = WeatherEffectType.CLOUDY,
+                    gradientStartColor = 0xFF5D7E9F, // Xám xanh
+                    gradientEndColor = 0xFFB8C6DB
+                )
+            } else {
+                WeatherBackground(
+                    effectType = WeatherEffectType.CLOUDY,
+                    gradientStartColor = 0xFF1F2633,
+                    gradientEndColor = 0xFF3E4A5E
+                )
+            }
+
+            // 3: Trời nhiều mây (Overcast) - Xám xịt
+            3 -> if (isDay) {
+                WeatherBackground(
+                    effectType = WeatherEffectType.CLOUDY,
+                    gradientStartColor = 0xFF63707D, // Xám chì
+                    gradientEndColor = 0xFFAAB7C4  // Xám bạc
+                )
+            } else {
+                WeatherBackground(
+                    effectType = WeatherEffectType.CLOUDY,
+                    gradientStartColor = 0xFF232526,
+                    gradientEndColor = 0xFF414345
+                )
+            }
+
+            // ================= SƯƠNG MÙ (FOG) =================
+            // 45: Sương mù (Fog)
+            45 -> WeatherBackground(
+                effectType = WeatherEffectType.CLOUDY,
+                gradientStartColor = 0xFF607D8B, // Blue Grey
+                gradientEndColor = 0xFFB0BEC5
             )
 
+            // 48: Sương muối (Depositing Rime Fog) - Lạnh hơn
+            48 -> WeatherBackground(
+                effectType = WeatherEffectType.CLOUDY,
+                gradientStartColor = 0xFF546E7A,
+                gradientEndColor = 0xFFCFD8DC
+            )
+
+            // ================= MƯA PHÙN (DRIZZLE) =================
+            // 51: Mưa phùn nhẹ (Light Drizzle)
+            51 -> WeatherBackground(
+                effectType = WeatherEffectType.RAIN,
+                gradientStartColor = 0xFF6190E8, // Xanh nhạt
+                gradientEndColor = 0xFFA7BFE8
+            )
+
+            // 53: Mưa phùn vừa (Moderate Drizzle) - Đậm hơn chút
+            53 -> WeatherBackground(
+                effectType = WeatherEffectType.RAIN,
+                gradientStartColor = 0xFF5078B3,
+                gradientEndColor = 0xFF8E9EAB
+            )
+
+            // 55: Mưa phùn dày (Dense Drizzle) - Gần giống mưa rào
+            55 -> WeatherBackground(
+                effectType = WeatherEffectType.RAIN,
+                gradientStartColor = 0xFF3E5F8A,
+                gradientEndColor = 0xFF708596
+            )
+
+            // ================= MƯA ĐÓNG BĂNG (FREEZING DRIZZLE) =================
+            // 56: Mưa phùn băng nhẹ
+            56 -> WeatherBackground(
+                effectType = WeatherEffectType.SNOW,
+                gradientStartColor = 0xFF78909C,
+                gradientEndColor = 0xFFECE9E6
+            )
+
+            // 57: Mưa phùn băng dày
+            57 -> WeatherBackground(
+                effectType = WeatherEffectType.SNOW,
+                gradientStartColor = 0xFF546E7A,
+                gradientEndColor = 0xFFBDC3C7
+            )
+
+            // ================= MƯA (RAIN) =================
+            // 61: Mưa nhỏ (Slight Rain) - Màu iOS Classic Rain
+            61 -> WeatherBackground(
+                effectType = WeatherEffectType.RAIN,
+                gradientStartColor = 0xFF4B6CB7, // Xanh biển tối
+                gradientEndColor = 0xFF182848  // Navy
+            )
+
+            // 63: Mưa vừa (Moderate Rain) - Tối hơn
+            63 -> WeatherBackground(
+                effectType = WeatherEffectType.RAIN,
+                gradientStartColor = 0xFF375492,
+                gradientEndColor = 0xFF131D33
+            )
+
+            // 65: Mưa to (Heavy Rain) - Rất tối, cảm giác nặng hạt
+            65 -> WeatherBackground(
+                effectType = WeatherEffectType.RAIN,
+                gradientStartColor = 0xFF243B55, // Dark Slate
+                gradientEndColor = 0xFF141E30
+            )
+
+            // ================= MƯA BĂNG (FREEZING RAIN) =================
+            // 66: Mưa băng nhẹ
+            66 -> WeatherBackground(
+                effectType = WeatherEffectType.STORM,
+                gradientStartColor = 0xFF2C3E50,
+                gradientEndColor = 0xFF4CA1AF
+            )
+
+            // 67: Mưa băng nặng
+            67 -> WeatherBackground(
+                effectType = WeatherEffectType.STORM,
+                gradientStartColor = 0xFF203040,
+                gradientEndColor = 0xFF3C8090
+            )
+
+            // ================= TUYẾT (SNOW) =================
+            // 71: Tuyết rơi nhẹ (Slight Snow) - Xanh băng (Ice Blue)
+            71 -> WeatherBackground(
+                effectType = WeatherEffectType.SNOW,
+                gradientStartColor = 0xFF83A4D4,
+                gradientEndColor = 0xFFE2EAF7
+            )
+
+            // 73: Tuyết rơi vừa (Moderate Snow)
+            73 -> WeatherBackground(
+                effectType = WeatherEffectType.SNOW,
+                gradientStartColor = 0xFF6184B6,
+                gradientEndColor = 0xFFC8D7EB
+            )
+
+            // 75: Tuyết rơi dày (Heavy Snow) - Xám trắng mịt mù
+            75 -> WeatherBackground(
+                effectType = WeatherEffectType.SNOW,
+                gradientStartColor = 0xFF4A5F7A,
+                gradientEndColor = 0xFF9BAABF
+            )
+
+            // 77: Tuyết hạt (Snow Grains)
+            77 -> WeatherBackground(
+                effectType = WeatherEffectType.SNOW,
+                gradientStartColor = 0xFF607D8B,
+                gradientEndColor = 0xFFECEFF1
+            )
+
+            // ================= MƯA RÀO (SHOWERS) =================
+            // 80: Mưa rào nhẹ (Slight Rain Showers)
+            80 -> WeatherBackground(
+                effectType = WeatherEffectType.RAIN,
+                gradientStartColor = 0xFF3A6073,
+                gradientEndColor = 0xFF5A7083
+            )
+
+            // 81: Mưa rào vừa (Moderate Rain Showers)
+            81 -> WeatherBackground(
+                effectType = WeatherEffectType.RAIN,
+                gradientStartColor = 0xFF29323C,
+                gradientEndColor = 0xFF485563
+            )
+
+            // 82: Mưa rào rất to (Violent Rain Showers) - Đen kịt
+            82 -> WeatherBackground(
+                effectType = WeatherEffectType.STORM,
+                gradientStartColor = 0xFF101010, // Gần như đen
+                gradientEndColor = 0xFF434343
+            )
+
+            // ================= TUYẾT RÀO (SNOW SHOWERS) =================
+            // 85: Tuyết rào nhẹ
+            85 -> WeatherBackground(
+                effectType = WeatherEffectType.SNOW,
+                gradientStartColor = 0xFF455A64,
+                gradientEndColor = 0xFF90A4AE
+            )
+
+            // 86: Tuyết rào nặng
+            86 -> WeatherBackground(
+                effectType = WeatherEffectType.SNOW,
+                gradientStartColor = 0xFF37474F,
+                gradientEndColor = 0xFF78909C
+            )
+
+            // ================= DÔNG BÃO (THUNDERSTORM) =================
+            // 95: Có sấm sét (Thunderstorm) - Tím than
+            95 -> WeatherBackground(
+                effectType = WeatherEffectType.STORM,
+                gradientStartColor = 0xFF1A2980, // Deep Indigo
+                gradientEndColor = 0xFF26D0CE  // Cyan tint
+            )
+
+            // 96: Dông bão + Mưa đá nhẹ
+            96 -> WeatherBackground(
+                effectType = WeatherEffectType.STORM,
+                gradientStartColor = 0xFF0F2027,
+                gradientEndColor = 0xFF2C5364
+            )
+
+            // 99: Dông bão + Mưa đá to - Rất nguy hiểm
+            99 -> WeatherBackground(
+                effectType = WeatherEffectType.STORM,
+                gradientStartColor = 0xFF000428, // Midnight Blue
+                gradientEndColor = 0xFF004E92
+            )
+
+            // Mặc định (Default)
             else -> WeatherBackground(
                 effectType = WeatherEffectType.CLOUDY,
-                gradientStartColor = 0xFF4A90E2,
-                gradientEndColor = 0xFF8AC7FF
+                gradientStartColor = 0xFF42A5F5,
+                gradientEndColor = 0xFF90CAF9
             )
         }
     }
 }
+
+data class DetailedWeatherItem(val code: Int, val description: String, val isDay: Boolean)
+
+@Preview(showBackground = true, widthDp = 400, heightDp = 2000)
+@Composable
+fun FullWeatherCodePreview() {
+    // Tạo danh sách tất cả các mã để test màu
+    val weatherCodes = listOf(
+        DetailedWeatherItem(0, "0: Clear Sky (Day)", true),
+        DetailedWeatherItem(0, "0: Clear Sky (Night)", false),
+        DetailedWeatherItem(1, "1: Mainly Clear", true),
+        DetailedWeatherItem(2, "2: Partly Cloudy", true),
+        DetailedWeatherItem(3, "3: Overcast", true),
+        DetailedWeatherItem(45, "45: Fog", true),
+        DetailedWeatherItem(51, "51: Light Drizzle", true),
+        DetailedWeatherItem(53, "53: Mod Drizzle", true),
+        DetailedWeatherItem(55, "55: Dense Drizzle", true),
+        DetailedWeatherItem(61, "61: Slight Rain", true),
+        DetailedWeatherItem(63, "63: Mod Rain", true),
+        DetailedWeatherItem(65, "65: Heavy Rain", true),
+        DetailedWeatherItem(71, "71: Light Snow", true),
+        DetailedWeatherItem(75, "75: Heavy Snow", true),
+        DetailedWeatherItem(80, "80: Rain Showers", true),
+        DetailedWeatherItem(82, "82: Violent Showers", true),
+        DetailedWeatherItem(95, "95: Thunderstorm", false),
+        DetailedWeatherItem(99, "99: Thunder + Hail", false)
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Text(
+            "Full Weather Code Colors",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        weatherCodes.forEach { item ->
+            val bg = WeatherUtils.getBackgroundData(item.code, item.isDay)
+
+            WeatherCodeStrip(item, bg)
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+    }
+}
+
+@Composable
+fun WeatherCodeStrip(item: DetailedWeatherItem, data: WeatherBackground) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(70.dp)
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(Color(data.gradientStartColor), Color(data.gradientEndColor))
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(item.description, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(
+                "Start: #${data.gradientStartColor.toString(16).uppercase().takeLast(6)}",
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
