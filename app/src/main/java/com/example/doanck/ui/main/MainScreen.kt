@@ -149,7 +149,6 @@ fun MainScreen(
                 if (isWeatherReady) {
                     Column {
                         MainTopNavBar(
-                            selectedTab = selectedTab,
                             onTabSelected = { tab ->
                                 when (tab) {
                                     MainTab.SETTINGS -> onOpenSettings()
@@ -307,7 +306,11 @@ fun WeatherContentV2(
                     rainProbability = daily.rainProbabilities?.getOrNull(index),
                     rainSumMm = daily.rainSums?.getOrNull(index),
                     hourlyTemps = hourlyTempsByDate[dateStr] ?: emptyList(),
-                    hourlyWeatherCodes = hourlyCodesByDate[dateStr] ?: emptyList()
+                    hourlyWeatherCodes = hourlyCodesByDate[dateStr] ?: emptyList(),
+                    feelsLikeMin = daily.apparentTempMin?.getOrNull(index)?.let { convertTemp(it) },
+                    feelsLikeMax = daily.apparentTempMax?.getOrNull(index)?.let { convertTemp(it) },
+                    humidityMean = daily.humidityMean?.getOrNull(index)?.roundToInt(),
+                    windSpeedMax = daily.windSpeedMax?.getOrNull(index)?.roundToInt()
                 ))
             }
 

@@ -13,13 +13,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.platform.LocalDensity // Cần thiết để chuyển đổi Dp -> Int
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.IntOffset // Cần thiết cho Popup offset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import com.example.doanck.R
 
 enum class MainTab {
@@ -31,7 +37,6 @@ enum class MainTab {
 
 private val SmokedGlassGradient = Brush.verticalGradient(
     colors = listOf(
-        // Màu gốc: Blue Grey 100 (Xám xanh rất nhạt)
         Color(0xFF7BCBEC).copy(alpha = 0.25f),
         Color(0xFFB0BEC5).copy(alpha = 0.10f)
     )
@@ -44,11 +49,68 @@ private val SoftBorderGradient = Brush.linearGradient(
     )
 )
 
-private val MenuBackground = Color(0xFF263238).copy(alpha = 0.95f)
+private val MapMenuSmokedGradient = Brush.verticalGradient(
+    colors = listOf(
+        Color(0xFF7BCBEC).copy(alpha = 0.25f),
+        Color(0xFFB0BEC5).copy(alpha = 0.10f)
+    )
+)
+
+@Composable
+fun SmokedDropdownMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    offset: DpOffset = DpOffset(0.dp, 8.dp),
+    content: @Composable ColumnScope.() -> Unit
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        offset = offset,
+        modifier = Modifier
+            .background(MapMenuSmokedGradient, RoundedCornerShape(4.dp))
+    ) {
+        Column(
+            modifier = Modifier
+                .width(IntrinsicSize.Max)
+                .padding(vertical = 4.dp),
+            content = content
+        )
+    }
+}
+
+
+@Composable
+private fun MenuItemContent(
+    text: String,
+    iconRes: Int,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Image(
+            painter = painterResource(id = iconRes),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = text,
+            color = Color(0xFF1E3A8A),
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Normal
+        )
+    }
+}
 
 @Composable
 fun MainTopNavBar(
-    selectedTab: MainTab,
     onTabSelected: (MainTab) -> Unit,
     onOpenWeatherMap: () -> Unit,
     onOpenRescueMap: () -> Unit
@@ -63,7 +125,7 @@ fun MainTopNavBar(
 
         Box(
             modifier = Modifier
-                .size(72.dp)
+                .size(66.dp)
                 .clip(CircleShape)
                 .background(SmokedGlassGradient)
                 .border(BorderStroke(1.dp, SoftBorderGradient), CircleShape)
@@ -76,18 +138,20 @@ fun MainTopNavBar(
                 modifier = Modifier.size(28.dp),
                 colorFilter = ColorFilter.tint(Color.White)
             )
-            DropdownMenu(
+
+            SmokedDropdownMenu(
                 expanded = mapMenuExpanded,
-                onDismissRequest = { mapMenuExpanded = false },
-                modifier = Modifier.background(MenuBackground)
+                onDismissRequest = { mapMenuExpanded = false }
             ) {
-                DropdownMenuItem(
-                    text = { Text("Bản đồ thời tiết", color = Color.White) },
+                MenuItemContent(
+                    text = "Bản đồ thời tiết",
+                    iconRes = R.drawable.ic_weather_map,
                     onClick = { mapMenuExpanded = false; onOpenWeatherMap() }
                 )
-                HorizontalDivider(color = Color.White.copy(alpha = 0.15f))
-                DropdownMenuItem(
-                    text = { Text("Bản đồ cứu trợ", color = Color.White) },
+
+                MenuItemContent(
+                    text = "Bản đồ cứu trợ",
+                    iconRes = R.drawable.ic_sos_map,
                     onClick = { mapMenuExpanded = false; onOpenRescueMap() }
                 )
             }
@@ -95,17 +159,18 @@ fun MainTopNavBar(
 
         Spacer(Modifier.width(12.dp))
 
-        // --- 2. THANH MENU ---
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(72.dp)
+                .height(66.dp)
                 .clip(RoundedCornerShape(100))
                 .background(SmokedGlassGradient)
                 .border(BorderStroke(1.dp, SoftBorderGradient), RoundedCornerShape(100))
         ) {
             Row(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
@@ -121,7 +186,7 @@ fun MainTopNavBar(
                 )
                 NavPillItem(
                     iconRes = R.drawable.ic_tab_search,
-                    label = "Tìm",
+                    label = "Tìm kiếm",
                     onClick = { onTabSelected(MainTab.SEARCH) }
                 )
                 NavPillItem(
@@ -153,10 +218,10 @@ private fun RowScope.NavPillItem(
         Image(
             painter = painterResource(id = iconRes),
             contentDescription = null,
-            modifier = Modifier.size(28.dp),
+            modifier = Modifier.size(20.dp),
             colorFilter = ColorFilter.tint(Color.White)
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             text = label,
             color = Color.White,

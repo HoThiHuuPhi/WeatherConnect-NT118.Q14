@@ -51,7 +51,11 @@ data class DailyDisplayItem(
     val rainProbability: Int?,
     val rainSumMm: Double?,
     val hourlyTemps: List<Int> = emptyList(),
-    val hourlyWeatherCodes: List<Int> = emptyList()
+    val hourlyWeatherCodes: List<Int> = emptyList(),
+    val feelsLikeMin: Int? = null,
+    val feelsLikeMax: Int? = null,
+    val humidityMean: Int? = null,
+    val windSpeedMax: Int? = null
 )
 
 data class ChartPoint(
@@ -186,6 +190,16 @@ private fun DailyRow(
     val barWidthWeight = (endFrac - startFrac).coerceAtLeast(0.05f)
     val barEndWeight = (1f - endFrac).coerceAtLeast(0.0001f)
 
+    val avgTemp = (item.minTemp + item.maxTemp) / 2
+
+    val barGradient = when {
+        avgTemp <= 0 -> Brush.horizontalGradient(listOf(Color(0xFF4BBAEE), Color(0xFF81D4FA))) // xanh biển
+        avgTemp in 1..15 -> Brush.horizontalGradient(listOf(Color(0xFF00C853), Color(0xFFAEEA00))) // xanh lá nhạt
+        avgTemp in 16..25 -> Brush.horizontalGradient(listOf(Color(0xFFFFD600), Color(0xFFE5D33B))) // vàng nhạt
+        avgTemp in 26..32 -> Brush.horizontalGradient(listOf(Color(0xFFFF6D00), Color(0xFFFFAB00))) // cam nhạt
+        else -> Brush.horizontalGradient(listOf(Color(0xFFEE4152), Color(0xFFE57373))) // đỏ nhạt
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -254,7 +268,7 @@ private fun DailyRow(
                     modifier = Modifier
                         .weight(barWidthWeight)
                         .fillMaxHeight()
-                        .background(Color(0xFFFFA726))
+                        .background(barGradient)
                 )
                 Spacer(modifier = Modifier.weight(barEndWeight))
             }
@@ -320,7 +334,7 @@ fun WeatherDetailBottomSheet(
             Text(
                 text = day.dayLabel + ", " + day.dateLabel,
                 color = Color.White.copy(alpha = 0.7f),
-                fontSize = 14.sp,
+                fontSize = 18.sp,
                 fontFamily = SFProDisplay
             )
             Spacer(Modifier.height(16.dp))
@@ -382,9 +396,44 @@ fun WeatherDetailBottomSheet(
             Spacer(Modifier.height(16.dp))
             InfoRow("Tổng lượng mưa (mm)", day.rainSumMm?.let { String.format("%.1f mm", it) } ?: "Chưa có dữ liệu lượng mưa.")
             Spacer(Modifier.height(16.dp))
-            InfoRow("Tóm tắt hàng ngày", "Nhiệt độ dao động từ ${day.minTemp}°$unit đến ${day.maxTemp}°$unit, thời tiết nhìn chung ổn định.")
+            val dailySummary = buildString {
+                append("Nhiệt độ dao động từ ${day.minTemp}°$unit đến ${day.maxTemp}°$unit.")
+                day.rainProbability?.let {
+                    append(" Khả năng mưa khoảng $it%.")
+                }
+                day.rainSumMm?.let {
+                    if (it > 0.0) append(" Tổng lượng mưa dự kiến khoảng ${"%.1f".format(it)} mm.")
+                }
+                day.humidityMean?.let {
+                    append(" Độ ẩm trung bình khoảng $it%.")
+                }
+            }
+
+            InfoRow(
+                title = "Tóm tắt hàng ngày",
+                content = dailySummary
+            )
+
             Spacer(Modifier.height(16.dp))
-            InfoRow("Giới thiệu về nhiệt độ cảm nhận", "Nhiệt độ cảm nhận còn phụ thuộc vào gió, độ ẩm, bức xạ mặt trời...")
+
+            // ====  GIỚI THIỆU VỀ NHIỆT ĐỘ CẢM NHẬN  ====
+            val feelsLikeText = day.feelsLikeMin?.let { flMin ->
+                val flMax = day.feelsLikeMax ?: flMin
+                buildString {
+                    append("Theo thông tin của Open-Meteo, cơ thể cảm nhận khoảng từ $flMin°$unit đến $flMax°$unit.")
+                    day.windSpeedMax?.let { ws ->
+                        append(" Gió tối đa khoảng $ws km/h nên khi gió mạnh có thể cảm thấy lạnh hơn thực tế.")
+                    }
+                    day.humidityMean?.let { h ->
+                        append(" Độ ẩm khoảng $h% cũng làm cảm giác oi bức hoặc lạnh hơn.")
+                    }
+                }
+            } ?: "Nhiệt độ cảm nhận còn phụ thuộc vào gió, độ ẩm và bức xạ mặt trời, nên đôi khi sẽ khác một chút so với nhiệt độ đo được."
+
+            InfoRow(
+                title = "Giới thiệu về nhiệt độ cảm nhận",
+                content = feelsLikeText
+            )
         }
     }
 }
@@ -392,8 +441,8 @@ fun WeatherDetailBottomSheet(
 @Composable
 private fun InfoRow(title: String, content: String) {
     Column {
-        Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, fontFamily = SFProDisplay)
-        Text(content, color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp, fontFamily = SFProDisplay)
+        Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, fontFamily = SFProDisplay)
+        Text(content, color = Color.White.copy(alpha = 0.85f), fontSize = 16.sp, fontFamily = SFProDisplay)
     }
 }
 
