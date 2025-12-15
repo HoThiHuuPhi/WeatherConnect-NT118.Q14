@@ -15,9 +15,9 @@ import com.example.doanck.ui.auth.ForgotPasswordScreen
 import com.example.doanck.ui.chat.CommunityChatScreen
 import com.example.doanck.ui.login.LoginScreen
 import com.example.doanck.ui.main.MainScreen
-import com.example.doanck.ui.main.RescueMapScreen      // ✅ Import Màn hình Bản đồ tổng quan (MỚI)
-import com.example.doanck.ui.main.SOSMapScreen       // ✅ Import màn hình Bản đồ chi tiết (1 người)
-import com.example.doanck.ui.main.SOSMonitorScreen   // ✅ Import màn hình Danh sách SOS
+import com.example.doanck.ui.main.RescueMapScreen
+import com.example.doanck.ui.main.SOSMapScreen
+import com.example.doanck.ui.main.SOSMonitorScreen
 import com.example.doanck.ui.main.SearchScreen
 import com.example.doanck.ui.main.SettingsScreen
 import com.example.doanck.ui.main.WeatherMapScreen
@@ -45,7 +45,7 @@ fun AppNav(
         navController = navController,
         startDestination = startDestination
     ) {
-        // --- NHÓM AUTH ---
+        // --- AUTH ---
         composable("login") {
             LoginScreen(
                 appDataStore = appDataStore,
@@ -67,19 +67,24 @@ fun AppNav(
                 onOpenSearch = { navController.navigate("search") },
                 onOpenWeatherMap = { navController.navigate("weather_map") },
 
-                // ✅ Sự kiện mở danh sách cứu trợ
+                // Nút mở Dialog danh sách SOS (nếu logic MainScreen dùng Dialog thì dòng này có thể thừa hoặc thiếu tùy logic, nhưng cứ giữ nguyên)
                 onOpenRescueMap = { navController.navigate("rescue_list") },
 
-                // 🔴 Xử lý nút bấm "Xem bản đồ" trong Dialog của MainScreen
+                // 🔴 KHẮC PHỤC LỖI TẠI ĐÂY: Thêm logic điều hướng cho SOS Map (1 người)
                 onNavigateToSOSMap = { lat, lon, name ->
                     val safeName = if (name.isNotBlank()) name else "SOS"
                     val cleanName = safeName.replace("/", "-")
                     navController.navigate("sos_map/$lat/$lon/$cleanName")
+                },
+
+                // 🟢 QUAN TRỌNG: Thêm dòng này để nút "Map Overview" trong Dialog hoạt động
+                onOpenRescueOverview = {
+                    navController.navigate("rescue_map_overview")
                 }
             )
         }
 
-        // --- CÁC TÍNH NĂNG ---
+        // --- TÍNH NĂNG KHÁC ---
         composable("settings") {
             SettingsScreen(
                 appDataStore = appDataStore,
@@ -90,40 +95,35 @@ fun AppNav(
                 }
             )
         }
-
         composable("chat") { CommunityChatScreen(onBack = { navController.popBackStack() }) }
         composable("search") { SearchScreen(onBack = { navController.popBackStack() }) }
         composable("weather_map") { WeatherMapScreen(onBack = { navController.popBackStack() }) }
 
-        // ==========================================
-        // 🔥 CÁC ROUTE MỚI CHO HỆ THỐNG CỨU TRỢ 🔥
-        // ==========================================
+        // --- HỆ THỐNG CỨU TRỢ ---
 
-        // 1. Danh sách người cần cứu (SOS List)
+        // 1. Danh sách SOS
         composable("rescue_list") {
             SOSMonitorScreen(
                 onBack = { navController.popBackStack() },
-                // Khi bấm nút "Xem bản đồ" trên từng thẻ SOS
                 onNavigateToMap = { lat, lon, name ->
                     val safeName = if (name.isNotBlank()) name else "SOS"
                     val cleanName = safeName.replace("/", "-")
                     navController.navigate("sos_map/$lat/$lon/$cleanName")
                 },
-                // 🟢 SỰ KIỆN MỚI: Mở bản đồ tổng quan (Nút trên thanh tìm kiếm)
                 onOpenMapOverview = {
                     navController.navigate("rescue_map_overview")
                 }
             )
         }
 
-        // 2. Màn hình bản đồ tổng quan (Hiển thị tất cả chấm đỏ) - MỚI
+        // 2. Bản đồ tổng quan (Map chứa tất cả chấm đỏ)
         composable("rescue_map_overview") {
             RescueMapScreen(
                 onBack = { navController.popBackStack() }
             )
         }
 
-        // 3. Màn hình bản đồ chi tiết (Chỉ đường cho 1 người)
+        // 3. Bản đồ chi tiết (Chỉ đường cho 1 người)
         composable(
             route = "sos_map/{lat}/{lon}/{name}",
             arguments = listOf(
@@ -132,7 +132,6 @@ fun AppNav(
                 navArgument("name") { type = NavType.StringType }
             )
         ) { backStackEntry ->
-            // Lấy dữ liệu từ đường dẫn
             val latStr = backStackEntry.arguments?.getString("lat") ?: "0.0"
             val lonStr = backStackEntry.arguments?.getString("lon") ?: "0.0"
             val name = backStackEntry.arguments?.getString("name") ?: "Người cần cứu"

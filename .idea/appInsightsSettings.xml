@@ -9,7 +9,7 @@
               <option name="connection">
                 <ConnectionSetting>
                   <option name="appId" value="com.example.doanck" />
-                  <option name="mobileSdkAppId" value="1:713310723970:android:d078cfe16dc80badbbb99b" />
+                  <option name="mobileSdkAppId" value="1:713310723970:android:7f54c1aa3788f8adbbb99b" />
                   <option name="projectId" value="weatherapp-nt118" />
                   <option name="projectNumber" value="713310723970" />
                 </ConnectionSetting>

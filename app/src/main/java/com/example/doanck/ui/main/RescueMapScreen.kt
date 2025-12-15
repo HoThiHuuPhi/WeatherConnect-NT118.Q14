@@ -1,8 +1,5 @@
 package com.example.doanck.ui.main
 
-import android.content.Intent
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -19,120 +16,132 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
+import androidx.preference.PreferenceManager
 import com.example.doanck.data.model.SOSRequest
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.FolderOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RescueMapScreen(
-    onBack: () -> Unit
-) {
+fun RescueMapScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var sosList by remember { mutableStateOf<List<SOSRequest>>(emptyList()) }
-    var mapView by remember { mutableStateOf<MapView?>(null) }
 
-    // 1. Lắng nghe dữ liệu SOS từ Firebase theo thời gian thực
+    // 1) Listen SOS realtime
     DisposableEffect(Unit) {
-        val query = Firebase.firestore.collection("sos_requests")
-        val listener = query.addSnapshotListener { snapshot, e ->
-            if (e != null) return@addSnapshotListener
-            if (snapshot != null) {
-                sosList = snapshot.toObjects(SOSRequest::class.java)
+        val listener = Firebase.firestore.collection("sos_requests")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) return@addSnapshotListener
+                sosList = snapshot?.toObjects(SOSRequest::class.java) ?: emptyList()
             }
-        }
         onDispose { listener.remove() }
     }
 
-    // Cấu hình OSM
-    LaunchedEffect(Unit) {
-        Configuration.getInstance().userAgentValue = context.packageName
-    }
+    // 2) Init osmdroid + MapView (IMPORTANT: done BEFORE creating MapView)
+    val mapView = remember {
+        val cfg = Configuration.getInstance()
+        cfg.load(context, PreferenceManager.getDefaultSharedPreferences(context))
+        cfg.userAgentValue = context.packageName
 
-    // 2. Vẽ lại Marker khi danh sách SOS thay đổi
-    LaunchedEffect(sosList) {
-        mapView?.let { map ->
-            // Giữ lại overlay vị trí của tôi (thường là cái đầu tiên hoặc tìm theo type)
-            val myLocationOverlay = map.overlays.firstOrNull { it is MyLocationNewOverlay }
+        // (optional nhưng rất nên) đưa cache về thư mục app để tránh lỗi trên vài máy
+        val base = File(context.filesDir, "osmdroid").apply { mkdirs() }
+        val tile = File(base, "tile").apply { mkdirs() }
+        cfg.osmdroidBasePath = base
+        cfg.osmdroidTileCache = tile
 
-            map.overlays.clear() // Xóa hết marker cũ
-
-            // Thêm lại overlay vị trí của tôi nếu có
-            if (myLocationOverlay != null) {
-                map.overlays.add(myLocationOverlay)
-            }
-
-            // Duyệt danh sách và cắm cờ
-            sosList.forEach { sos ->
-                val marker = Marker(map)
-                marker.position = GeoPoint(sos.lat, sos.lon)
-                marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                marker.title = "SĐT: ${sos.phone}"
-                marker.snippet = sos.message
-                marker.subDescription = "Nhấn để gọi hoặc tìm đường"
-
-                // Sự kiện khi bấm vào Marker
-                marker.setOnMarkerClickListener { m, _ ->
-                    m.showInfoWindow()
-                    true
-                }
-
-                // Thay đổi icon marker thành màu đỏ (Mặc định OSM là màu xanh hơi chán)
-                // Nếu bạn có ảnh icon riêng thì dùng: marker.icon = ContextCompat.getDrawable(context, R.drawable.ic_sos_pin)
-                // Ở đây mình dùng mặc định nhưng bạn có thể thêm icon 'ic_sos' màu đỏ vào drawable để đẹp hơn
-
-                map.overlays.add(marker)
-            }
-            map.invalidate() // Vẽ lại bản đồ
+        MapView(context).apply {
+            setTileSource(TileSourceFactory.MAPNIK)
+            setMultiTouchControls(true)
+            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+            controller.setZoom(5.0)
+            controller.setCenter(GeoPoint(16.0471, 108.2068)) // VN
         }
     }
 
-    Scaffold(
-        containerColor = Color.White
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+    // 3) Overlays: giữ cố định 2 overlay (my location + folder SOS)
+    val myLocationOverlay = remember {
+        MyLocationNewOverlay(GpsMyLocationProvider(context), mapView).apply {
+            enableMyLocation()
+        }
+    }
+    val sosOverlay = remember { FolderOverlay() }
 
-            // --- BẢN ĐỒ ---
+    // add overlays 1 lần
+    LaunchedEffect(Unit) {
+        if (!mapView.overlays.contains(myLocationOverlay)) mapView.overlays.add(myLocationOverlay)
+        if (!mapView.overlays.contains(sosOverlay)) mapView.overlays.add(sosOverlay)
+
+        // runOnFirstFix chạy background thread -> phải post về UI thread
+        myLocationOverlay.runOnFirstFix {
+            val p = myLocationOverlay.myLocation
+            if (p != null) {
+                mapView.post {
+                    mapView.controller.setZoom(14.0)
+                    mapView.controller.animateTo(p)
+                }
+            }
+        }
+    }
+
+    // 4) Update SOS markers (chỉ clear folder sosOverlay, KHÔNG clear toàn bộ map.overlays)
+    LaunchedEffect(sosList) {
+        sosOverlay.items.clear()
+
+        sosList.forEach { sos ->
+            val marker = Marker(mapView).apply {
+                position = GeoPoint(sos.lat, sos.lon)
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                title = "SĐT: ${sos.phone}"
+                snippet = sos.message
+                subDescription = "Nhấn để xem"
+
+                setOnMarkerClickListener { m, _ ->
+                    m.showInfoWindow()
+                    true
+                }
+            }
+            sosOverlay.add(marker)
+        }
+
+        mapView.invalidate()
+    }
+
+    // 5) MapView lifecycle (tránh leak/crash)
+    DisposableEffect(Unit) {
+        mapView.onResume()
+        onDispose {
+            mapView.onPause()
+            mapView.onDetach()
+        }
+    }
+
+    Scaffold(containerColor = Color.White) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
             AndroidView(
-                factory = { ctx ->
-                    MapView(ctx).apply {
-                        setTileSource(TileSourceFactory.MAPNIK)
-                        setMultiTouchControls(true)
-                        zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
-
-                        val controller = this.controller
-                        controller.setZoom(14.0) // Zoom xa hơn để nhìn tổng quan
-                        controller.setCenter(GeoPoint(16.0471, 108.2068)) // Mặc định ở giữa VN hoặc vị trí bạn muốn
-
-                        // Hiển thị vị trí của người dùng (Chấm xanh)
-                        val locationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(ctx), this)
-                        locationOverlay.enableMyLocation()
-                        this.overlays.add(locationOverlay)
-
-                        // Tự động zoom đến vị trí người dùng lần đầu
-                        locationOverlay.runOnFirstFix {
-                            controller.animateTo(locationOverlay.myLocation)
-                        }
-
-                        mapView = this
-                    }
-                },
+                factory = { mapView },
                 modifier = Modifier.fillMaxSize()
             )
 
-            // --- HEADER (Tiêu đề + Nút Back) ---
+            // Header
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 48.dp, start = 16.dp, end = 16.dp)
+                    .statusBarsPadding()
+                    .padding(top = 12.dp, start = 16.dp, end = 16.dp)
                     .fillMaxWidth()
                     .height(56.dp)
                     .shadow(8.dp, RoundedCornerShape(28.dp)),
@@ -140,12 +149,13 @@ fun RescueMapScreen(
                 shape = RoundedCornerShape(28.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
+
                     Text(
                         text = "Bản đồ cứu trợ (${sosList.size} ca)",
                         style = MaterialTheme.typography.titleMedium,
@@ -153,12 +163,24 @@ fun RescueMapScreen(
                         color = Color.Red,
                         modifier = Modifier.weight(1f)
                     )
+
+                    IconButton(onClick = {
+                        val p = myLocationOverlay.myLocation
+                        if (p != null) {
+                            mapView.post {
+                                mapView.controller.setZoom(14.0)
+                                mapView.controller.animateTo(p)
+                            }
+                        }
+                    }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Về vị trí tôi")
+                    }
                 }
             }
 
-            // --- NÚT CHUYỂN VỀ DẠNG DANH SÁCH (Góc dưới phải) ---
+            // FAB quay lại danh sách
             FloatingActionButton(
-                onClick = onBack, // Quay lại màn hình danh sách
+                onClick = onBack,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp),
