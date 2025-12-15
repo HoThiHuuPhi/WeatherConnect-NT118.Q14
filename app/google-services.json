@@ -7,12 +7,21 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:713310723970:android:d078cfe16dc80badbbb99b",
+        "mobilesdk_app_id": "1:713310723970:android:7f54c1aa3788f8adbbb99b",
         "android_client_info": {
           "package_name": "com.example.doanck"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "713310723970-android-app.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.doanck",
+            "certificate_hash": "adfbc94c7fa63eda7528e89584704f1757b14219"
+          }
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBWjuRv8dFwNRPDhDU8yjdslB3J7tM2Z5g"

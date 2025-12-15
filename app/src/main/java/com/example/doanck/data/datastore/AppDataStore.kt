@@ -3,7 +3,7 @@ package com.example.doanck.data.datastore
 import android.content.Context
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
-import com.example.doanck.data.model.PendingSOS // 🟢 MỚI: Import model SOS
+import com.example.doanck.data.model.SOSRequest // 🟢 MỚI: Import model SOS
 import com.google.gson.Gson // 🟢 MỚI: Import Gson
 import com.google.gson.reflect.TypeToken // 🟢 MỚI: Để xử lý List
 import kotlinx.coroutines.flow.Flow
@@ -81,11 +81,11 @@ class AppDataStore(private val context: Context) {
         }
 
     // 🟢 MỚI: Đọc danh sách SOS đang chờ (từ JSON -> List)
-    val sosQueue: Flow<List<PendingSOS>> = context.dataStore.data
+    val sosQueue: Flow<List<SOSRequest>> = context.dataStore.data
         .catch { emit(emptyPreferences()) }
         .map { prefs ->
             val json = prefs[SOS_QUEUE_KEY] ?: "[]"
-            val type = object : TypeToken<List<PendingSOS>>() {}.type
+            val type = object : TypeToken<List<SOSRequest>>() {}.type
             try {
                 gson.fromJson(json, type)
             } catch (e: Exception) {
@@ -150,11 +150,11 @@ class AppDataStore(private val context: Context) {
     }
 
     // 🟢 MỚI: Thêm SOS vào hàng chờ (Lưu Offline)
-    suspend fun addToQueue(sos: PendingSOS) {
+    suspend fun addToQueue(sos: SOSRequest) {
         context.dataStore.edit { prefs ->
             val json = prefs[SOS_QUEUE_KEY] ?: "[]"
-            val type = object : TypeToken<List<PendingSOS>>() {}.type
-            val currentList: MutableList<PendingSOS> = try {
+            val type = object : TypeToken<List<SOSRequest>>() {}.type
+            val currentList: MutableList<SOSRequest> = try {
                 gson.fromJson(json, type)
             } catch (e: Exception) {
                 mutableListOf()

@@ -15,7 +15,6 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -27,6 +26,7 @@ android {
                 "proguard-rules.pro"
             )
         }
+        // KHÔNG CẦN CẤU HÌNH DEBUG THỦ CÔNG NỮA
     }
 
     compileOptions {
@@ -43,13 +43,10 @@ android {
     }
 }
 
-
 dependencies {
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
-
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
@@ -64,29 +61,31 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
+    // Firebase
     implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-storage-ktx")
 
+    // Location & Maps
     implementation("androidx.navigation:navigation-compose:2.7.7")
-    implementation("com.google.android.gms:play-services-location:21.0.1")
-    implementation("androidx.compose.material:material-icons-extended")
-    implementation("io.coil-kt:coil-compose:2.4.0")
-
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-
     implementation("androidx.compose.material:material-icons-extended:1.6.8")
     implementation("com.google.android.gms:play-services-location:21.0.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+
+    // Libs khác
+    implementation("io.coil-kt:coil-compose:2.4.0")
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
-    implementation("io.coil-kt:coil-compose:2.4.0")
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("androidx.browser:browser:1.8.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
+
     implementation("com.google.android.gms:play-services-maps:18.2.0")
     implementation("com.google.maps.android:maps-compose:2.11.4")
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
+    implementation("com.github.MKergall:osmbonuspack:6.9.0")
 }

@@ -4,96 +4,95 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Geocoder
 import android.location.Location
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.Priority
-import com.google.android.gms.location.CurrentLocationRequest
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Bundle
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import java.io.IOException
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
-import java.util.concurrent.TimeoutException
+import kotlin.coroutines.resume
 
-data class LocationData(
-    val lat: Double,
-    val lon: Double,
-    val cityName: String
-)
+// ✅ Class này nằm ở đây là ĐÚNG
+data class LocationData(val lat: Double, val lon: Double, val cityName: String)
 
+// ✅ Object này nằm ở đây là ĐÚNG
 object LocationHelper {
-
-    private val CITIES_TO_PREFIX_TP = setOf(
-        "thủ đức", "thủy nguyên", "phúc yên", "vĩnh yên", "bắc ninh", "từ sơn",
-        "hạ long", "uông bí", "cẩm phả", "móng cái", "đông triều", "hải dương",
-        "hưng yên", "thái bình", "phủ lý", "nam định", "hoa lư", "tam điệp",
-        "hà giang", "cao bằng", "bắc kạn", "tuyên quang", "lào cai", "yên bái",
-        "thái nguyên", "sông công", "phổ yên", "lạng sơn", "bắc giang", "việt trì",
-        "điện biên phủ", "lai châu", "sơn la", "hòa bình", "thanh hóa", "sầm sơn",
-        "vinh", "hà tĩnh", "đồng hới", "đông hà", "tam kỳ", "hội an",
-        "quảng ngãi", "quy nhơn", "tuy hòa", "nha trang", "cam ranh", "phan rang – tháp chàm",
-        "phan thiết", "kon tum", "pleiku", "buôn ma thuột", "gia nghĩa", "đà lạt",
-        "bảo lộc", "đồng xoài", "tây ninh", "thủ dầu một", "dĩ an", "thuận an",
-        "tân uyên", "bến cát", "biên hòa", "long khánh", "vũng tàu", "bà rịa",
-        "phú mỹ", "tân an", "mỹ tho", "gò công", "bến tre", "trà vinh",
-        "vĩnh long", "cao lãnh", "sa đéc", "hồng ngự", "long xuyên", "châu đốc",
-        "rạch giá", "phú quốc", "hà tiên", "vị thanh", "ngã bảy", "sóc trăng",
-        "bạc liêu", "cà mau"
-    )
+    private val CITIES_TO_PREFIX_TP = setOf("hồ chí minh", "hà nội", "đà nẵng", "hải phòng", "cần thơ", "thủ đức", "huế", "nha trang", "vũng tàu", "đà lạt", "buôn ma thuột", "pleiku", "quy nhơn", "phan thiết", "biên hòa", "thủ dầu một", "mỹ tho", "cà mau", "long xuyên", "rạch giá")
 
     @SuppressLint("MissingPermission")
-    suspend fun fetchLocation(client: FusedLocationProviderClient): Location = withContext(Dispatchers.IO) {
-        try {
-            val request = CurrentLocationRequest.Builder()
-                .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
-                .build()
+    suspend fun fetchLocation(context: Context): Location {
+        return withTimeoutOrNull(5000L) {
+            suspendCancellableCoroutine<Location> { continuation ->
+                val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                val isGps = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                val isNetwork = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
 
-            client.getCurrentLocation(request, null).await()
-                ?: client.lastLocation.await()
-                ?: throw TimeoutException("Không thể lấy vị trí GPS hiện tại.")
+                if (!isGps && !isNetwork) {
+                    if (continuation.isActive) continuation.resume(getDefaultLocation())
+                    return@suspendCancellableCoroutine
+                }
 
-        } catch (e: Exception) {
-            e.printStackTrace()
-            // Trả về vị trí mặc định (TP.HCM)
-            Location("default").apply {
-                latitude = 10.8231
-                longitude = 106.6297
+                val listener = object : LocationListener {
+                    override fun onLocationChanged(location: Location) {
+                        if (continuation.isActive) {
+                            continuation.resume(location)
+                            locationManager.removeUpdates(this)
+                        }
+                    }
+                    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+                    override fun onProviderEnabled(provider: String) {}
+                    override fun onProviderDisabled(provider: String) {}
+                }
+
+                try {
+                    if (isNetwork) locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0L, 0f, listener, context.mainLooper)
+                    if (isGps) locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0L, 0f, listener, context.mainLooper)
+
+                    val lastKnownNet = if (isNetwork) locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) else null
+                    val lastKnownGps = if (isGps) locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null
+
+                    if (lastKnownGps != null) {
+                        locationManager.removeUpdates(listener)
+                        if (continuation.isActive) continuation.resume(lastKnownGps)
+                    } else if (lastKnownNet != null) {
+                        locationManager.removeUpdates(listener)
+                        if (continuation.isActive) continuation.resume(lastKnownNet)
+                    }
+                } catch (e: Exception) {
+                    if (continuation.isActive) continuation.resume(getDefaultLocation())
+                }
+                continuation.invokeOnCancellation { locationManager.removeUpdates(listener) }
             }
-        }
+        } ?: getDefaultLocation()
     }
 
+    private fun getDefaultLocation() = Location("default").apply { latitude = 10.8231; longitude = 106.6297 }
+
     suspend fun getCityName(context: Context, lat: Double, lon: Double): String = withContext(Dispatchers.IO) {
-        val geocoder = Geocoder(context, Locale("vi", "VN"))
-
         try {
+            val geocoder = Geocoder(context, Locale("vi", "VN"))
             val addresses = geocoder.getFromLocation(lat, lon, 1)
-            if (addresses.isNullOrEmpty()) return@withContext "Việt Nam (GPS)"
-
-            val address = addresses[0]
-            val subLocality = address.subLocality?.takeIf { it.trim().length > 2 }
-            val locality = address.locality ?: address.subAdminArea
-            val smallestUnit = subLocality ?: locality
-
-            val finalProvinceName = AdminMap.getNewProvinceName(address.adminArea)
-            var formattedUnit = smallestUnit?.trim()
-
-            // Thêm tiền tố "TP." nếu cần
-            formattedUnit?.let {
-                val normalized = it.lowercase(Locale.ROOT)
-                if (CITIES_TO_PREFIX_TP.any { city -> normalized.contains(city) } &&
-                    !it.startsWith("TP.", true) &&
-                    !it.startsWith("Thành phố", true) &&
-                    !it.startsWith("Huyện", true) &&
-                    !it.startsWith("Quận", true)
-                ) formattedUnit = "TP. $it"
+            if (!addresses.isNullOrEmpty()) {
+                val address = addresses[0]
+                val subLocality = address.subLocality
+                val locality = address.locality ?: address.subAdminArea
+                val name = subLocality ?: locality ?: address.adminArea
+                return@withContext name?.trim() ?: "Vị trí hiện tại"
             }
+        } catch (e: Exception) { }
+        return@withContext "Việt Nam"
+    }
 
-            return@withContext formattedUnit ?: finalProvinceName ?: "Vị trí hiện tại"
-
-        } catch (e: IOException) {
-            "Lỗi mạng (Vị trí)"
-        } catch (e: Exception) {
-            e.printStackTrace()
-            "Vị trí không xác định"
-        }
+    suspend fun getProvinceFromCoordinates(context: Context, lat: Double, lon: Double): String = withContext(Dispatchers.IO) {
+        try {
+            val geocoder = Geocoder(context, Locale("vi", "VN"))
+            val addresses = geocoder.getFromLocation(lat, lon, 1)
+            if (!addresses.isNullOrEmpty()) {
+                return@withContext addresses[0].adminArea ?: addresses[0].locality ?: "Không xác định"
+            }
+        } catch (e: Exception) { }
+        return@withContext "Không xác định"
     }
 }
