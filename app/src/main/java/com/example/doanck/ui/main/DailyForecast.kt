@@ -40,6 +40,9 @@ import com.example.doanck.ui.theme.SFProDisplay
 import com.example.doanck.utils.WeatherUtils
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.layout.BoxWithConstraints
+import kotlin.div
+import kotlin.text.toInt
+import kotlin.times
 
 
 data class DailyDisplayItem(
@@ -446,6 +449,7 @@ private fun InfoRow(title: String, content: String) {
     }
 }
 
+
 @Composable
 private fun AdvancedTemperatureChart(
     dataPoints: List<ChartPoint>,
@@ -514,8 +518,28 @@ private fun AdvancedTemperatureChart(
             }
 
             val gridColor = Color.White.copy(alpha = 0.2f)
-            val lineColor = Color(0xFFFFA726)
             val dotColor = Color(0xFF2C2C2E)
+
+            // determine chart colors based on average temperature (matches DailyRow logic)
+            val avgTemp = if (temps.isNotEmpty()) temps.average().toInt() else (minTemp + maxTemp) / 2
+            val (lineStartColor, lineEndColor) = when {
+                avgTemp <= 0 -> Pair(Color(0xFF4BBAEE), Color(0xFF81D4FA)) // xanh biển
+                avgTemp in 1..15 -> Pair(Color(0xFF00C853), Color(0xFFAEEA00)) // xanh lá nhạt
+                avgTemp in 16..25 -> Pair(Color(0xFFFFD600), Color(0xFFE5D33B)) // vàng nhạt
+                avgTemp in 26..32 -> Pair(Color(0xFFFF6D00), Color(0xFFFFAB00)) // cam nhạt
+                else -> Pair(Color(0xFFEE4152), Color(0xFFE57373)) // đỏ nhạt
+            }
+
+            val fillBrush = Brush.verticalGradient(
+                colors = listOf(lineStartColor.copy(alpha = 0.5f), lineEndColor.copy(alpha = 0.05f)),
+                startY = 0f,
+                endY = chartH
+            )
+            val lineBrush = Brush.linearGradient(
+                colors = listOf(lineStartColor, lineEndColor),
+                start = Offset(0f, 0f),
+                end = Offset(chartW, 0f)
+            )
 
             val textPaint = AndroidPaint().apply {
                 color = AndroidColor.LTGRAY
@@ -575,18 +599,16 @@ private fun AdvancedTemperatureChart(
                 close()
             }
 
+            // draw filled area using fillBrush
             drawPath(
                 path = fillPath,
-                brush = Brush.verticalGradient(
-                    colors = listOf(lineColor.copy(alpha = 0.5f), lineColor.copy(alpha = 0.05f)),
-                    startY = 0f,
-                    endY = chartH
-                )
+                brush = fillBrush
             )
 
+            // draw stroked line using linear gradient brush so it matches the daily bar colors
             drawPath(
                 path = path,
-                color = lineColor,
+                brush = lineBrush,
                 style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
             )
 
@@ -594,7 +616,8 @@ private fun AdvancedTemperatureChart(
                 if (index < points.size) {
                     val p = points[index]
                     drawCircle(dotColor, radius = 5.dp.toPx(), center = Offset(p.x, p.y))
-                    drawCircle(lineColor, radius = 4.dp.toPx(), center = Offset(p.x, p.y),
+                    // small highlight using main color
+                    drawCircle(lineStartColor, radius = 4.dp.toPx(), center = Offset(p.x, p.y),
                         style = Stroke(2.dp.toPx()))
                 }
             }
