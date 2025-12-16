@@ -455,7 +455,7 @@ fun MessageItemSunny(msg: CommunityMessage) {
         else -> Color.White
     }
 
-    val textColor = if (isMe) Color.White else TextDarkChat
+    val textColor = if (isMe && msg.severity == "info") Color.White else TextDarkChat
 
     Column(
         modifier = Modifier.fillMaxWidth(),

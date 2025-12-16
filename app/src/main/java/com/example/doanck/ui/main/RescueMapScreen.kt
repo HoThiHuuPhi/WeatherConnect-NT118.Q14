@@ -1,11 +1,14 @@
 package com.example.doanck.ui.main
 
+import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,7 +19,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.preference.PreferenceManager
 import com.example.doanck.data.model.SOSRequest
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -47,13 +49,12 @@ fun RescueMapScreen(onBack: () -> Unit) {
         onDispose { listener.remove() }
     }
 
-    // 2) Init osmdroid + MapView (IMPORTANT: done BEFORE creating MapView)
+    // 2) Init osmdroid + MapView
     val mapView = remember {
         val cfg = Configuration.getInstance()
-        cfg.load(context, PreferenceManager.getDefaultSharedPreferences(context))
+        cfg.load(context, context.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
         cfg.userAgentValue = context.packageName
 
-        // (optional nhưng rất nên) đưa cache về thư mục app để tránh lỗi trên vài máy
         val base = File(context.filesDir, "osmdroid").apply { mkdirs() }
         val tile = File(base, "tile").apply { mkdirs() }
         cfg.osmdroidBasePath = base
@@ -62,13 +63,14 @@ fun RescueMapScreen(onBack: () -> Unit) {
         MapView(context).apply {
             setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
+            // Tắt nút zoom mặc định (vì nó xấu), ta sẽ tự vẽ nút đẹp hơn
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
             controller.setZoom(5.0)
-            controller.setCenter(GeoPoint(16.0471, 108.2068)) // VN
+            controller.setCenter(GeoPoint(16.0471, 108.2068))
         }
     }
 
-    // 3) Overlays: giữ cố định 2 overlay (my location + folder SOS)
+    // 3) Overlays
     val myLocationOverlay = remember {
         MyLocationNewOverlay(GpsMyLocationProvider(context), mapView).apply {
             enableMyLocation()
@@ -76,12 +78,10 @@ fun RescueMapScreen(onBack: () -> Unit) {
     }
     val sosOverlay = remember { FolderOverlay() }
 
-    // add overlays 1 lần
     LaunchedEffect(Unit) {
         if (!mapView.overlays.contains(myLocationOverlay)) mapView.overlays.add(myLocationOverlay)
         if (!mapView.overlays.contains(sosOverlay)) mapView.overlays.add(sosOverlay)
 
-        // runOnFirstFix chạy background thread -> phải post về UI thread
         myLocationOverlay.runOnFirstFix {
             val p = myLocationOverlay.myLocation
             if (p != null) {
@@ -93,10 +93,9 @@ fun RescueMapScreen(onBack: () -> Unit) {
         }
     }
 
-    // 4) Update SOS markers (chỉ clear folder sosOverlay, KHÔNG clear toàn bộ map.overlays)
+    // 4) Update Markers
     LaunchedEffect(sosList) {
         sosOverlay.items.clear()
-
         sosList.forEach { sos ->
             val marker = Marker(mapView).apply {
                 position = GeoPoint(sos.lat, sos.lon)
@@ -104,19 +103,14 @@ fun RescueMapScreen(onBack: () -> Unit) {
                 title = "SĐT: ${sos.phone}"
                 snippet = sos.message
                 subDescription = "Nhấn để xem"
-
-                setOnMarkerClickListener { m, _ ->
-                    m.showInfoWindow()
-                    true
-                }
+                setOnMarkerClickListener { m, _ -> m.showInfoWindow(); true }
             }
             sosOverlay.add(marker)
         }
-
         mapView.invalidate()
     }
 
-    // 5) MapView lifecycle (tránh leak/crash)
+    // 5) Lifecycle
     DisposableEffect(Unit) {
         mapView.onResume()
         onDispose {
@@ -131,10 +125,7 @@ fun RescueMapScreen(onBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            AndroidView(
-                factory = { mapView },
-                modifier = Modifier.fillMaxSize()
-            )
+            AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
 
             // Header
             Surface(
@@ -155,7 +146,6 @@ fun RescueMapScreen(onBack: () -> Unit) {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
-
                     Text(
                         text = "Bản đồ cứu trợ (${sosList.size} ca)",
                         style = MaterialTheme.typography.titleMedium,
@@ -163,7 +153,6 @@ fun RescueMapScreen(onBack: () -> Unit) {
                         color = Color.Red,
                         modifier = Modifier.weight(1f)
                     )
-
                     IconButton(onClick = {
                         val p = myLocationOverlay.myLocation
                         if (p != null) {
@@ -178,7 +167,33 @@ fun RescueMapScreen(onBack: () -> Unit) {
                 }
             }
 
-            // FAB quay lại danh sách
+            // 👇 CỤM NÚT ZOOM (MỚI THÊM VÀO) 👇
+            Column(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd) // Căn giữa bên phải
+                    .padding(end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp) // Khoảng cách giữa 2 nút
+            ) {
+                // Nút Zoom In (+)
+                SmallFloatingActionButton(
+                    onClick = { mapView.controller.zoomIn() },
+                    containerColor = Color.White,
+                    contentColor = Color.Black
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Phóng to")
+                }
+
+                // Nút Zoom Out (-)
+                SmallFloatingActionButton(
+                    onClick = { mapView.controller.zoomOut() },
+                    containerColor = Color.White,
+                    contentColor = Color.Black
+                ) {
+                    Icon(Icons.Default.Remove, contentDescription = "Thu nhỏ")
+                }
+            }
+
+            // Nút quay lại danh sách (Giữ nguyên)
             FloatingActionButton(
                 onClick = onBack,
                 modifier = Modifier

@@ -11,10 +11,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.ArrowDropDown // Icon mũi tên xuống
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.FilterList // Icon lọc
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Map // ✅ Import icon Bản đồ
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -35,7 +37,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// 1. HÀM XÓA DẤU TIẾNG VIỆT
+// Hàm xóa dấu (Giữ nguyên)
 fun removeAccents(str: String): String {
     try {
         val temp = java.text.Normalizer.normalize(str, java.text.Normalizer.Form.NFD)
@@ -51,13 +53,17 @@ fun removeAccents(str: String): String {
 fun SOSMonitorScreen(
     onBack: () -> Unit,
     onNavigateToMap: (Double, Double, String) -> Unit,
-    onOpenMapOverview: () -> Unit // 🟢 2. Thêm tham số này để mở bản đồ tổng quan
+    onOpenMapOverview: () -> Unit
 ) {
     var sosList by remember { mutableStateOf<List<SOSRequest>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
 
-    // Lắng nghe dữ liệu Realtime
+    // 🟢 BIẾN CHO BỘ LỌC TỈNH
+    var selectedProvince by remember { mutableStateOf("Tất cả") }
+    var expandedProvinceMenu by remember { mutableStateOf(false) } // Trạng thái mở menu
+
+    // 1. Lấy dữ liệu Realtime
     DisposableEffect(Unit) {
         val query = Firebase.firestore.collection("sos_requests")
             .orderBy("timestamp", Query.Direction.DESCENDING)
@@ -72,16 +78,32 @@ fun SOSMonitorScreen(
         onDispose { listener.remove() }
     }
 
-    // Logic Lọc danh sách (Tìm kiếm không dấu)
+    // 2. Tự động trích xuất danh sách các Tỉnh có trong dữ liệu
+    val provinceList = remember(sosList) {
+        val provinces = sosList.mapNotNull { it.province }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
+        listOf("Tất cả") + provinces
+    }
+
+    // 3. Logic Lọc danh sách (Kết hợp Tìm kiếm + Lọc Tỉnh)
     val filteredList = sosList.filter { sos ->
-        if (searchQuery.isBlank()) return@filter true
+        // Điều kiện 1: Tìm kiếm từ khóa
+        val matchSearch = if (searchQuery.isBlank()) true else {
+            val query = removeAccents(searchQuery.trim())
+            val provinceNorm = removeAccents(sos.province ?: "")
+            val messageNorm = removeAccents(sos.message)
+            val phoneRaw = sos.phone
+            provinceNorm.contains(query) || messageNorm.contains(query) || phoneRaw.contains(query)
+        }
 
-        val query = removeAccents(searchQuery.trim())
-        val provinceNorm = removeAccents(sos.province ?: "")
-        val messageNorm = removeAccents(sos.message)
-        val phoneRaw = sos.phone
+        // Điều kiện 2: Lọc theo Tỉnh
+        val matchProvince = if (selectedProvince == "Tất cả") true else {
+            sos.province == selectedProvince
+        }
 
-        provinceNorm.contains(query) || messageNorm.contains(query) || phoneRaw.contains(query)
+        matchSearch && matchProvince
     }
 
     Scaffold(
@@ -95,45 +117,81 @@ fun SOSMonitorScreen(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
                 )
 
-                // Thanh tìm kiếm
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    placeholder = { Text("Nhập tỉnh, SĐT, nội dung...") },
-                    leadingIcon = { Icon(Icons.Default.Search, null) },
-
-                    // 🟢 3. THÊM NÚT BẢN ĐỒ VÀO THANH TÌM KIẾM
-                    trailingIcon = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Nút mở Bản đồ tổng quan
-                            IconButton(onClick = onOpenMapOverview) {
-                                Icon(
-                                    imageVector = Icons.Default.Map,
-                                    contentDescription = "Bản đồ tổng quan",
-                                    tint = Color(0xFF1976D2) // Màu xanh dương
-                                )
-                            }
-
-                            // Nút Xóa tìm kiếm (chỉ hiện khi có chữ)
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Xóa")
+                // THANH TÌM KIẾM & BỘ LỌC
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    // Thanh Search
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Tìm SĐT, nội dung...") },
+                        leadingIcon = { Icon(Icons.Default.Search, null) },
+                        trailingIcon = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = onOpenMapOverview) {
+                                    Icon(Icons.Default.Map, "Map", tint = Color(0xFF1976D2))
+                                }
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(Icons.Default.Clear, "Clear")
+                                    }
                                 }
                             }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // 🟢 BỘ LỌC TỈNH (Dropdown)
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { expandedProvinceMenu = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (selectedProvince != "Tất cả") Color(0xFFE3F2FD) else Color.Transparent
+                            ),
+                            border = if (selectedProvince != "Tất cả") null else ButtonDefaults.outlinedButtonBorder
+                        ) {
+                            Icon(Icons.Default.FilterList, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = if (selectedProvince == "Tất cả") "Lọc theo khu vực: Tất cả" else "Đang lọc: $selectedProvince",
+                                color = if (selectedProvince != "Tất cả") Color(0xFF1976D2) else Color.Gray
+                            )
+                            Spacer(Modifier.weight(1f))
+                            Icon(Icons.Default.ArrowDropDown, null)
                         }
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color(0xFFF5F5F5),
-                        unfocusedContainerColor = Color(0xFFF5F5F5),
-                        focusedBorderColor = Color.Red,
-                        unfocusedBorderColor = Color.Transparent
-                    ),
-                    singleLine = true
-                )
+
+                        // Menu xổ xuống
+                        DropdownMenu(
+                            expanded = expandedProvinceMenu,
+                            onDismissRequest = { expandedProvinceMenu = false },
+                            modifier = Modifier.fillMaxWidth(0.9f).background(Color.White)
+                        ) {
+                            provinceList.forEach { province ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            province,
+                                            fontWeight = if (province == selectedProvince) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (province == selectedProvince) Color(0xFF1976D2) else Color.Black
+                                        )
+                                    },
+                                    onClick = {
+                                        selectedProvince = province
+                                        expandedProvinceMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+                Divider(color = Color(0xFFEEEEEE))
             }
         },
         containerColor = Color(0xFFF2F4F8)
@@ -143,12 +201,16 @@ fun SOSMonitorScreen(
                 CircularProgressIndicator()
             }
         } else if (filteredList.isEmpty()) {
-            if (searchQuery.isNotEmpty()) {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text("Không tìm thấy kết quả cho '$searchQuery'", color = Color.Gray)
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.Search, null, tint = Color.Gray, modifier = Modifier.size(48.dp))
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        if (searchQuery.isNotEmpty()) "Không tìm thấy kết quả cho '$searchQuery'"
+                        else "Không có tin SOS nào tại $selectedProvince",
+                        color = Color.Gray
+                    )
                 }
-            } else {
-                EmptyState(padding)
             }
         } else {
             LazyColumn(
@@ -167,6 +229,7 @@ fun SOSMonitorScreen(
     }
 }
 
+// ... (Giữ nguyên phần SOSCardItemNew, InfoRow, EmptyState bên dưới file cũ - không cần thay đổi)
 @Composable
 fun SOSCardItemNew(
     sos: SOSRequest,
@@ -185,7 +248,6 @@ fun SOSCardItemNew(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Header: Trạng thái + Thời gian
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -200,36 +262,18 @@ fun SOSCardItemNew(
                     Text(timeString, fontSize = 12.sp, color = Color.Gray)
                 }
             }
-
             Spacer(Modifier.height(8.dp))
-
-            // Địa chỉ Tỉnh
-            Text(
-                text = provinceDisplay,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF1976D2)
-            )
-
+            Text(provinceDisplay, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1976D2))
             Spacer(Modifier.height(8.dp))
-
-            // Nội dung tin nhắn
             Text(sos.message.ifBlank { "Không có nội dung mô tả" }, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1F2937), lineHeight = 24.sp)
-
             Spacer(Modifier.height(12.dp))
             Divider(color = Color.Gray.copy(alpha = 0.1f))
             Spacer(Modifier.height(12.dp))
-
-            // Thông tin liên hệ
             InfoRow(icon = Icons.Default.Person, text = sos.email.ifBlank { "Ẩn danh" })
             Spacer(Modifier.height(6.dp))
             InfoRow(icon = Icons.Default.Call, text = sos.phone, isBold = true)
-
             Spacer(Modifier.height(16.dp))
-
-            // Nút hành động
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Gọi điện
                 OutlinedButton(
                     onClick = {
                         val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${sos.phone}"))
@@ -243,8 +287,6 @@ fun SOSCardItemNew(
                     Spacer(Modifier.width(8.dp))
                     Text("Gọi điện")
                 }
-
-                // Xem bản đồ cá nhân (chỉ đường)
                 Button(
                     onClick = {
                         val safeName = if (sos.phone.isNotBlank()) sos.phone else "SOS"

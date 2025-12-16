@@ -6,9 +6,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Directions // Icon chỉ đường
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,10 +26,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.osmdroid.bonuspack.routing.OSRMRoadManager
+import org.osmdroid.bonuspack.routing.Road
 import org.osmdroid.bonuspack.routing.RoadManager
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
@@ -36,7 +40,6 @@ import org.osmdroid.views.overlay.compass.CompassOverlay
 import org.osmdroid.views.overlay.compass.InternalCompassOrientationProvider
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
-import org.osmdroid.bonuspack.routing.Road
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,16 +50,16 @@ fun SOSMapScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope() // Dùng để chạy tác vụ tìm đường (nặng)
+    val scope = rememberCoroutineScope()
 
     // Các biến quản lý Map
     var mapController by remember { mutableStateOf<org.osmdroid.api.IMapController?>(null) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var myLocationOverlay by remember { mutableStateOf<MyLocationNewOverlay?>(null) }
 
-    // Biến lưu đường đi đã vẽ (để xóa nếu vẽ lại)
+    // Biến lưu đường đi đã vẽ
     var currentRoadOverlay by remember { mutableStateOf<Polyline?>(null) }
-    var isRouting by remember { mutableStateOf(false) } // Hiển thị loading khi đang tìm đường
+    var isRouting by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         Configuration.getInstance().userAgentValue = context.packageName
@@ -75,7 +78,7 @@ fun SOSMapScreen(
                     MapView(ctx).apply {
                         setTileSource(TileSourceFactory.MAPNIK)
                         setMultiTouchControls(true)
-                        zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
+                        zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
 
                         val controller = this.controller
                         controller.setZoom(18.0)
@@ -83,7 +86,7 @@ fun SOSMapScreen(
                         controller.setCenter(targetPoint)
 
                         mapController = controller
-                        mapView = this // Lưu tham chiếu mapView để vẽ đường sau này
+                        mapView = this
 
                         // Vị trí của tôi
                         val locationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(ctx), this)
@@ -135,7 +138,6 @@ fun SOSMapScreen(
                             Text(name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, maxLines = 1)
                             Text("Tọa độ: $lat, $lon", style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 1)
                         }
-                        // Loading khi đang tìm đường
                         if (isRouting) {
                             CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFF4A90E2), strokeWidth = 2.dp)
                         } else {
@@ -147,14 +149,32 @@ fun SOSMapScreen(
             }
 
             // ------------------------------------------------
-            // 3. CÁC NÚT CHỨC NĂNG (BÊN PHẢI)
+            // 3. CÁC NÚT ZOOM (BÊN PHẢI)
+            // ------------------------------------------------
+            Column(
+                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                SmallFloatingActionButton(
+                    onClick = { mapView?.controller?.zoomIn() },
+                    containerColor = Color.White, contentColor = Color.Black
+                ) { Icon(Icons.Default.Add, "Zoom In") }
+
+                SmallFloatingActionButton(
+                    onClick = { mapView?.controller?.zoomOut() },
+                    containerColor = Color.White, contentColor = Color.Black
+                ) { Icon(Icons.Default.Remove, "Zoom Out") }
+            }
+
+            // ------------------------------------------------
+            // 4. CỤM NÚT CHỨC NĂNG (GÓC DƯỚI)
             // ------------------------------------------------
             Column(
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp) // Khoảng cách giữa các nút
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
 
-                // 🔥 NÚT 1: CHỈ ĐƯỜNG (MỚI)
+                // 🔥 NÚT CHỈ ĐƯỜNG
                 FloatingActionButton(
                     onClick = {
                         val myLoc = myLocationOverlay?.myLocation
@@ -163,12 +183,10 @@ fun SOSMapScreen(
                             return@FloatingActionButton
                         }
 
-                        // Bắt đầu tìm đường
                         isRouting = true
-                        scope.launch(Dispatchers.IO) { // Chạy luồng background
+                        scope.launch(Dispatchers.IO) {
                             try {
                                 val roadManager = OSRMRoadManager(context, "WeatherConnectUserAgent")
-                                // Chế độ: Đi xe (MEAN_BY_CAR), Đi bộ (MEAN_BY_FOOT), Xe đạp (MEAN_BY_BIKE)
                                 roadManager.setMean(OSRMRoadManager.MEAN_BY_CAR)
 
                                 val waypoints = arrayListOf(myLoc, GeoPoint(lat, lon))
@@ -178,21 +196,28 @@ fun SOSMapScreen(
                                     withContext(Dispatchers.Main) { Toast.makeText(context, "Không tìm thấy đường!", Toast.LENGTH_SHORT).show() }
                                 } else {
                                     val roadOverlay = RoadManager.buildRoadOverlay(road)
-                                    roadOverlay.outlinePaint.color = android.graphics.Color.BLUE // Màu đường đi
-                                    roadOverlay.outlinePaint.strokeWidth = 15f // Độ dày
+                                    roadOverlay.outlinePaint.color = android.graphics.Color.BLUE
+                                    roadOverlay.outlinePaint.strokeWidth = 15f
 
                                     withContext(Dispatchers.Main) {
-                                        // Xóa đường cũ nếu có
+                                        // ✅ TÍNH NĂNG 1: HIỆN THÔNG TIN ĐƯỜNG ĐI
+                                        val dist = road.mLength // km
+                                        val duration = road.mDuration // giây
+                                        val durationMin = (duration / 60).toInt()
+
+                                        Toast.makeText(context,
+                                            "Khoảng cách: ${String.format("%.1f", dist)} km\nThời gian: $durationMin phút",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+
+                                        // Vẽ đường
                                         if (currentRoadOverlay != null) mapView?.overlays?.remove(currentRoadOverlay)
-
-                                        // Vẽ đường mới
-                                        mapView?.overlays?.add(0, roadOverlay) // add(0) để vẽ dưới Marker
+                                        mapView?.overlays?.add(0, roadOverlay)
                                         currentRoadOverlay = roadOverlay
+                                        mapView?.invalidate()
 
-                                        mapView?.invalidate() // Refresh map
-
-                                        // Zoom để thấy toàn bộ đường đi
-                                        // mapView?.zoomToBoundingBox(road.mBoundingBox, true)
+                                        // ✅ TÍNH NĂNG 2: TỰ ĐỘNG ZOOM TRỌN CUNG ĐƯỜNG
+                                        mapView?.zoomToBoundingBox(road.mBoundingBox, true)
                                     }
                                 }
                             } catch (e: Exception) {
@@ -202,14 +227,14 @@ fun SOSMapScreen(
                             }
                         }
                     },
-                    containerColor = Color(0xFF4A90E2), // Màu xanh dương
+                    containerColor = Color(0xFF4A90E2),
                     contentColor = Color.White,
                     shape = CircleShape
                 ) {
                     Icon(Icons.Default.Directions, contentDescription = "Chỉ đường")
                 }
 
-                // NÚT 2: ZOOM VỀ MỤC TIÊU
+                // NÚT ZOOM VỀ MỤC TIÊU
                 FloatingActionButton(
                     onClick = {
                         mapController?.animateTo(GeoPoint(lat, lon))
@@ -222,7 +247,7 @@ fun SOSMapScreen(
                     Icon(Icons.Default.LocationOn, contentDescription = "Mục tiêu")
                 }
 
-                // NÚT 3: VỊ TRÍ CỦA TÔI
+                // NÚT VỀ VỊ TRÍ CỦA TÔI
                 FloatingActionButton(
                     onClick = {
                         val myLoc = myLocationOverlay?.myLocation
