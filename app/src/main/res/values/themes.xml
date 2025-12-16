@@ -1,5 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Theme chính -->
+    <style name="Theme.DoAnCK" parent="Theme.Material3.DayNight.NoActionBar">
 
-    <style name="Theme.DoAnCK" parent="android:Theme.Material.Light.NoActionBar" />
+    </style>
+    <style name="Theme.WeatherConnect.Splash" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash_screen</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
 </resources>

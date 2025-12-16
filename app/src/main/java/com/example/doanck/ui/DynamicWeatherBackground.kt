@@ -323,6 +323,6 @@ fun DynamicWeatherBackground(
 @Preview
 @Composable
 fun PreviewDynamicWeather() {
-    val bg = WeatherBackground(WeatherEffectType.RAIN, 0xFF87CEEB, 0xFFFFFACD)
+    val bg = WeatherBackground(WeatherEffectType.SNOW, 0xFF0B1026, 0xFF0B1026)
     DynamicWeatherBackground(backgroundData = bg)
 }

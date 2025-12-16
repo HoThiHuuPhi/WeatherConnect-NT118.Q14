@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.doanck.data.api.RetrofitClient
 import com.example.doanck.data.datastore.AppDataStore
+import com.example.doanck.data.model.CurrentWeather
+import com.example.doanck.data.model.DailyUnits
 import com.example.doanck.ui.DynamicWeatherBackground
 import com.example.doanck.utils.*
 import kotlinx.coroutines.Dispatchers
@@ -158,6 +160,11 @@ fun SearchWeatherResult(
     var selectedDay by remember { mutableStateOf<DailyDisplayItem?>(null) }
     var showDetailSheet by remember { mutableStateOf(false) }
 
+    var rawCurrent by remember { mutableStateOf<CurrentWeather?>(null) }
+    var rawDaily by remember { mutableStateOf<DailyUnits?>(null) }
+    var elevationM by remember { mutableStateOf<Double?>(null) }
+
+
     fun convertTemp(c: Double?): Int {
         if (c == null) return 0
         return if (tempUnit == "F") (c * 1.8 + 32).roundToInt() else c.roundToInt()
@@ -167,11 +174,17 @@ fun SearchWeatherResult(
 
         isLoading = true
         errorMessage = null // Reset lỗi
+
         try {
             val response = RetrofitClient.api.getWeather(lat, lon)
             val current = response.current
             val daily = response.daily
             val hourly = response.hourly
+
+            rawCurrent = response.current
+            rawDaily = response.daily
+            elevationM = response.elevation
+
 
             if (current == null || daily == null || hourly == null) {
                 throw IllegalStateException("API trả về dữ liệu không đầy đủ (current, daily, hoặc hourly là null).")
@@ -264,6 +277,8 @@ fun SearchWeatherResult(
 
             weatherData = WeatherUIData(currentDisplay, hourlyList, dailyItems, summary)
 
+
+
         } catch (e: Exception) {
             e.printStackTrace()
             errorMessage = "Lỗi tải dữ liệu thời tiết: ${e.message ?: "Dữ liệu không hợp lệ"}"
@@ -306,7 +321,38 @@ fun SearchWeatherResult(
                         showDetailSheet = true
                     }
                 )
-                Spacer(Modifier.height(50.dp))
+                Spacer(Modifier.height(12.dp))
+
+                rawCurrent?.let { c ->
+                    rawDaily?.let { d ->
+                        WeatherCardsSection(
+                            feelsLike = convertTemp(c.apparentTemperature ?: c.temperature),
+                            actual = convertTemp(c.temperature),
+
+                            dayMin = convertTemp(d.minTemperatures.firstOrNull() ?: c.temperature),
+                            dayMax = convertTemp(d.maxTemperatures.firstOrNull() ?: c.temperature),
+
+                            uvMax = d.uvIndexMax?.firstOrNull()?.toFloat(),
+
+                            windSpeedKmh = c.windSpeed10m?.roundToInt(),
+                            windGustKmh = c.windGusts10m?.roundToInt(),
+                            windDirDeg = c.windDirection10m?.roundToInt(),
+
+                            sunriseHHmm = toHHmm(d.sunrise?.firstOrNull()),
+                            sunsetHHmm  = toHHmm(d.sunset?.firstOrNull()),
+
+                            rainMm = c.rain ?: c.precipitation,
+                            rainSumMm = d.rainSums?.firstOrNull() ?: d.rainSum?.firstOrNull(),
+                            snowfallMm = d.snowfallSum?.firstOrNull() ?: c.snowfall,
+
+                            visibilityKm = c.visibility?.div(1000.0),
+                            humidityPercent = c.humidity ?: d.humidityMean?.firstOrNull(),
+                            pressureHPa = c.pressure,
+                            elevationM = elevationM
+                        )
+                    }
+                }
+
             }
             if (showDetailSheet && selectedDay != null) {
                 WeatherDetailBottomSheet(

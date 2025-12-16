@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.SignalCellularOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -30,7 +31,10 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import com.example.doanck.data.api.RetrofitClient
 import com.example.doanck.data.datastore.AppDataStore
+import com.example.doanck.data.model.CurrentWeather
+import com.example.doanck.data.model.DailyUnits
 import com.example.doanck.ui.DynamicWeatherBackground
+import com.example.doanck.ui.main.WeatherCardsSection
 import com.example.doanck.utils.*
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -184,7 +188,6 @@ fun MainScreen(
     }
 }
 
-// ... (Các phần NetworkStatusHeader và WeatherContentV2 giữ nguyên như cũ)
 @Composable
 fun NetworkStatusHeader(isOnline: Boolean, queueSize: Int) {
     val bgColor = if (isOnline) Color(0xFF4CAF50) else Color(0xFF616161)
@@ -194,6 +197,9 @@ fun NetworkStatusHeader(isOnline: Boolean, queueSize: Int) {
         Spacer(Modifier.width(8.dp)); Text(text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
     }
 }
+
+fun toHHmm(iso: String?): String? =
+    iso?.takeIf { it.length >= 16 }?.substring(11, 16)
 
 @Composable
 fun WeatherContentV2(
@@ -209,16 +215,26 @@ fun WeatherContentV2(
     var isLoading by remember { mutableStateOf(true) }
     var errorText by remember { mutableStateOf<String?>(null) }
 
+    var rawCurrent by remember { mutableStateOf<CurrentWeather?>(null) }
+    var rawDaily by remember { mutableStateOf<DailyUnits?>(null) }
+
+    var elevationM by remember { mutableStateOf<Double?>(null) }
+
+
     fun convertTemp(c: Double): Int = if (tempUnit == "F") (c * 1.8 + 32).roundToInt() else c.roundToInt()
 
     LaunchedEffect(lat, lon, tempUnit) {
         isLoading = true; errorText = null
         try {
             val response = RetrofitClient.api.getWeather(lat, lon)
+            elevationM = response.elevation
             val current = response.current
             val daily = response.daily
             val hourly = response.hourly
             val isDay = current.isDay == 1
+
+            rawCurrent = current
+            rawDaily = daily
 
             val currentDisplay = CurrentDisplayData(
                 cityName,
@@ -261,7 +277,6 @@ fun WeatherContentV2(
                 val localDate = LocalDate.parse(dateStr)
                 val label = when (index) {
                     0 -> "Hôm nay"
-                    1 -> "Ngày mai"
                     else -> dayFormatter.format(localDate)
                 }
 
@@ -280,6 +295,11 @@ fun WeatherContentV2(
                     humidityMean = daily.humidityMean?.getOrNull(index)?.roundToInt(),
                     windSpeedMax = daily.windSpeedMax?.getOrNull(index)?.roundToInt()
                 ))
+
+                val summary = WeatherUtils.generateSummaryText(hourly.weatherCodes, hourly.windGusts)
+
+                onBackgroundChange(WeatherUtils.getBackgroundData(current.weatherCode, isDay))
+                weatherData = WeatherUIData(currentDisplay, hourlyList, dailyItems, summary)
             }
 
             val summary = WeatherUtils.generateSummaryText(hourly.weatherCodes, hourly.windGusts)
@@ -302,6 +322,44 @@ fun WeatherContentV2(
                 HourlyForecastSection(summaryText = data.summary, hourlyData = data.hourly, unit = tempUnit)
                 Spacer(Modifier.height(12.dp))
                 DailyForecastSection(items = data.daily, unit = tempUnit, onDayClick = onDayClick)
+                rawCurrent?.let { c ->
+                    rawDaily?.let { d ->
+                        WeatherCardsSection(
+                            feelsLike = convertTemp(c.apparentTemperature ?: c.temperature),
+                            actual = convertTemp(c.temperature),
+
+                            dayMin = convertTemp(d.minTemperatures.firstOrNull() ?: c.temperature),
+                            dayMax = convertTemp(d.maxTemperatures.firstOrNull() ?: c.temperature),
+
+                            uvMax = d.uvIndexMax?.firstOrNull()?.toFloat(),
+
+                            windSpeedKmh = c.windSpeed10m?.roundToInt(),
+                            windGustKmh = c.windGusts10m?.roundToInt(),
+                            windDirDeg = c.windDirection10m?.roundToInt(),
+
+                            sunriseHHmm = toHHmm(d.sunrise?.firstOrNull()),
+                            sunsetHHmm  = toHHmm(d.sunset?.firstOrNull()),
+
+                            // mưa hiện tại (ưu tiên rain, fallback precipitation)
+                            rainMm = c.rain ?: c.precipitation,
+
+                            // tổng mưa hôm nay (ưu tiên precipitation_sum)
+                            rainSumMm = d.rainSums?.firstOrNull() ?: d.rainSum?.firstOrNull(),
+
+                            // tuyết hôm nay
+                            snowfallMm = d.snowfallSum?.firstOrNull() ?: c.snowfall,
+
+                            // visibility từ API là mét -> đổi km
+                            visibilityKm = c.visibility?.div(1000.0),
+
+                            humidityPercent = c.humidity ?: d.humidityMean?.firstOrNull(),
+
+                            pressureHPa = c.pressure,
+
+                            elevationM = elevationM
+                        )
+                    }
+                }
             }
         }
     }

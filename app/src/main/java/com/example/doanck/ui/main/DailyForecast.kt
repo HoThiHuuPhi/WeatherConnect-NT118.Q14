@@ -463,7 +463,6 @@ private fun AdvancedTemperatureChart(
     }
 
     Column(modifier = modifier) {
-        // dãy icon phía trên
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()

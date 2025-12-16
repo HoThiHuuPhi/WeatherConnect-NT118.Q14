@@ -11,9 +11,13 @@ import androidx.navigation.compose.rememberNavController
 import com.example.doanck.data.datastore.AppDataStore
 import com.example.doanck.navigation.AppNav
 import com.example.doanck.ui.login.LoginScreen
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
+
         super.onCreate(savedInstanceState)
         setContent {
             val navController = rememberNavController()

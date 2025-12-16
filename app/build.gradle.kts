@@ -52,6 +52,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.ui)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -90,5 +91,8 @@ dependencies {
     implementation("com.github.MKergall:osmbonuspack:6.9.0")
     implementation("androidx.preference:preference-ktx:1.2.1")
     implementation("androidx.preference:preference-ktx:1.2.1")
+
+    implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("com.google.android.material:material:1.10.0")
 
 }

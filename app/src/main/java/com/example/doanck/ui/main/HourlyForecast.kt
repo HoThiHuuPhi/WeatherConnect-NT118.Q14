@@ -35,7 +35,7 @@ fun HourlyForecastSection(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 20.dp)
+            .padding(horizontal = 16.dp, vertical = 0.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(HourlyGlassDark)
             .padding(16.dp)
