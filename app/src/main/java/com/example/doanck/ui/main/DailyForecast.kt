@@ -419,7 +419,6 @@ fun WeatherDetailBottomSheet(
 
             Spacer(Modifier.height(16.dp))
 
-            // ====  GIỚI THIỆU VỀ NHIỆT ĐỘ CẢM NHẬN  ====
             val feelsLikeText = day.feelsLikeMin?.let { flMin ->
                 val flMax = day.feelsLikeMax ?: flMin
                 buildString {
@@ -519,7 +518,6 @@ private fun AdvancedTemperatureChart(
             val gridColor = Color.White.copy(alpha = 0.2f)
             val dotColor = Color(0xFF2C2C2E)
 
-            // determine chart colors based on average temperature (matches DailyRow logic)
             val avgTemp = if (temps.isNotEmpty()) temps.average().toInt() else (minTemp + maxTemp) / 2
             val (lineStartColor, lineEndColor) = when {
                 avgTemp <= 0 -> Pair(Color(0xFF4BBAEE), Color(0xFF81D4FA)) // xanh biển
@@ -598,13 +596,11 @@ private fun AdvancedTemperatureChart(
                 close()
             }
 
-            // draw filled area using fillBrush
             drawPath(
                 path = fillPath,
                 brush = fillBrush
             )
 
-            // draw stroked line using linear gradient brush so it matches the daily bar colors
             drawPath(
                 path = path,
                 brush = lineBrush,
@@ -615,7 +611,6 @@ private fun AdvancedTemperatureChart(
                 if (index < points.size) {
                     val p = points[index]
                     drawCircle(dotColor, radius = 5.dp.toPx(), center = Offset(p.x, p.y))
-                    // small highlight using main color
                     drawCircle(lineStartColor, radius = 4.dp.toPx(), center = Offset(p.x, p.y),
                         style = Stroke(2.dp.toPx()))
                 }

@@ -128,7 +128,6 @@ fun MainTopNavBar(
                 .size(66.dp)
                 .clip(CircleShape)
                 .background(SmokedGlassGradient)
-                .border(BorderStroke(1.dp, SoftBorderGradient), CircleShape)
                 .clickable { mapMenuExpanded = true },
             contentAlignment = Alignment.Center
         ) {

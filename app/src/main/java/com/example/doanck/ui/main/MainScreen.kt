@@ -17,12 +17,14 @@ import androidx.compose.material.icons.filled.SignalCellularOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,6 +35,7 @@ import com.example.doanck.data.api.RetrofitClient
 import com.example.doanck.data.datastore.AppDataStore
 import com.example.doanck.data.model.CurrentWeather
 import com.example.doanck.data.model.DailyUnits
+import com.example.doanck.data.model.HourlyUnits
 import com.example.doanck.ui.DynamicWeatherBackground
 import com.example.doanck.ui.main.WeatherCardsSection
 import com.example.doanck.utils.*
@@ -218,6 +221,9 @@ fun WeatherContentV2(
     var rawCurrent by remember { mutableStateOf<CurrentWeather?>(null) }
     var rawDaily by remember { mutableStateOf<DailyUnits?>(null) }
 
+    var rawHourly by remember { mutableStateOf<HourlyUnits?>(null) }
+    var currentStartIndex by remember { mutableIntStateOf(0) }
+
     var elevationM by remember { mutableStateOf<Double?>(null) }
 
 
@@ -247,6 +253,9 @@ fun WeatherContentV2(
 
             val currentHour = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH")).toInt()
             val startIndex = hourly.time.indexOfFirst { it.substring(11, 13).toInt() >= currentHour }.let { if (it != -1) it else 0 }
+
+            rawHourly = hourly
+            currentStartIndex = startIndex
 
             val hourlyList = mutableListOf<HourlyDisplayItem>()
             for (i in startIndex until startIndex + 24) {
@@ -320,45 +329,46 @@ fun WeatherContentV2(
                 MainWeatherDisplay(data.current, tempUnit)
                 Spacer(Modifier.height(24.dp))
                 HourlyForecastSection(summaryText = data.summary, hourlyData = data.hourly, unit = tempUnit)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(24.dp))
                 DailyForecastSection(items = data.daily, unit = tempUnit, onDayClick = onDayClick)
-                rawCurrent?.let { c ->
-                    rawDaily?.let { d ->
-                        WeatherCardsSection(
-                            feelsLike = convertTemp(c.apparentTemperature ?: c.temperature),
-                            actual = convertTemp(c.temperature),
+                if (rawCurrent != null && rawDaily != null && rawHourly != null) {
+                    val c = rawCurrent!!
+                    val d = rawDaily!!
+                    val h = rawHourly!!
 
-                            dayMin = convertTemp(d.minTemperatures.firstOrNull() ?: c.temperature),
-                            dayMax = convertTemp(d.maxTemperatures.firstOrNull() ?: c.temperature),
+                    WeatherCardsSection(
+                        feelsLike = convertTemp(c.apparentTemperature ?: c.temperature),
+                        actual = convertTemp(c.temperature),
+                        dayMin = convertTemp(d.minTemperatures.firstOrNull() ?: c.temperature),
+                        dayMax = convertTemp(d.maxTemperatures.firstOrNull() ?: c.temperature),
+                        uvMax = d.uvIndexMax?.firstOrNull()?.toFloat(),
+                        windSpeedKmh = c.windSpeed10m?.roundToInt(),
+                        windGustKmh = c.windGusts10m?.roundToInt(),
+                        windDirDeg = c.windDirection10m?.roundToInt(),
+                        sunriseHHmm = toHHmm(d.sunrise?.firstOrNull()),
+                        sunsetHHmm = toHHmm(d.sunset?.firstOrNull()),
+                        rainMm = c.rain ?: c.precipitation,
+                        rainSumMm = d.rainSums?.firstOrNull() ?: d.rainSum?.firstOrNull(),
+                        snowfallMm = d.snowfallSum?.firstOrNull() ?: c.snowfall,
+                        humidityPercent = c.humidity ?: d.humidityMean?.firstOrNull(),
 
-                            uvMax = d.uvIndexMax?.firstOrNull()?.toFloat(),
+                        pressureHPa = c.pressure,
+                        pressureMslHPa = c.pressureMsl,
+                        elevationM = elevationM,
 
-                            windSpeedKmh = c.windSpeed10m?.roundToInt(),
-                            windGustKmh = c.windGusts10m?.roundToInt(),
-                            windDirDeg = c.windDirection10m?.roundToInt(),
+                        cape = h.cape?.getOrNull(currentStartIndex),
+                        cloudCover = c.cloudCover,
+                        cloudLow = h.cloudCoverLow?.getOrNull(currentStartIndex),
+                        cloudMid = h.cloudCoverMid?.getOrNull(currentStartIndex),
+                        cloudHigh = h.cloudCoverHigh?.getOrNull(currentStartIndex),
 
-                            sunriseHHmm = toHHmm(d.sunrise?.firstOrNull()),
-                            sunsetHHmm  = toHHmm(d.sunset?.firstOrNull()),
+                        soilMoisture0_1 = h.soilMoisture0to1?.getOrNull(currentStartIndex),
+                        soilMoisture1_3 = h.soilMoisture3to9?.getOrNull(currentStartIndex),
+                        soilMoisture3_9 = h.soilMoisture9to27?.getOrNull(currentStartIndex),
 
-                            // mưa hiện tại (ưu tiên rain, fallback precipitation)
-                            rainMm = c.rain ?: c.precipitation,
-
-                            // tổng mưa hôm nay (ưu tiên precipitation_sum)
-                            rainSumMm = d.rainSums?.firstOrNull() ?: d.rainSum?.firstOrNull(),
-
-                            // tuyết hôm nay
-                            snowfallMm = d.snowfallSum?.firstOrNull() ?: c.snowfall,
-
-                            // visibility từ API là mét -> đổi km
-                            visibilityKm = c.visibility?.div(1000.0),
-
-                            humidityPercent = c.humidity ?: d.humidityMean?.firstOrNull(),
-
-                            pressureHPa = c.pressure,
-
-                            elevationM = elevationM
-                        )
-                    }
+                        dewPoint = c.dewPoint2m,
+                        sunshineDurationSeconds = d.sunshineDuration?.firstOrNull()
+                    )
                 }
             }
         }

@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,6 +28,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -35,6 +38,7 @@ import com.example.doanck.data.api.RetrofitClient
 import com.example.doanck.data.datastore.AppDataStore
 import com.example.doanck.data.model.CurrentWeather
 import com.example.doanck.data.model.DailyUnits
+import com.example.doanck.data.model.HourlyUnits
 import com.example.doanck.ui.DynamicWeatherBackground
 import com.example.doanck.utils.*
 import kotlinx.coroutines.Dispatchers
@@ -151,18 +155,19 @@ fun SearchWeatherResult(
     lon: Double,
     cityName: String,
     tempUnit: String,
-    onBackgroundChange: (WeatherBackground) -> Unit
-) {
+    onBackgroundChange: (WeatherBackground) -> Unit) {
     var weatherData by remember { mutableStateOf<WeatherUIData?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) } // Thêm state báo lỗi
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     var selectedDay by remember { mutableStateOf<DailyDisplayItem?>(null) }
     var showDetailSheet by remember { mutableStateOf(false) }
 
     var rawCurrent by remember { mutableStateOf<CurrentWeather?>(null) }
     var rawDaily by remember { mutableStateOf<DailyUnits?>(null) }
+    var rawHourly by remember { mutableStateOf<HourlyUnits?>(null) }
     var elevationM by remember { mutableStateOf<Double?>(null) }
+    var currentStartIndex by remember { mutableIntStateOf(0) }
 
 
     fun convertTemp(c: Double?): Int {
@@ -171,9 +176,8 @@ fun SearchWeatherResult(
     }
 
     LaunchedEffect(lat, lon, tempUnit) {
-
         isLoading = true
-        errorMessage = null // Reset lỗi
+        errorMessage = null
 
         try {
             val response = RetrofitClient.api.getWeather(lat, lon)
@@ -181,21 +185,35 @@ fun SearchWeatherResult(
             val daily = response.daily
             val hourly = response.hourly
 
-            rawCurrent = response.current
-            rawDaily = response.daily
-            elevationM = response.elevation
-
-
             if (current == null || daily == null || hourly == null) {
-                throw IllegalStateException("API trả về dữ liệu không đầy đủ (current, daily, hoặc hourly là null).")
+                throw IllegalStateException("API trả về dữ liệu không đầy đủ.")
             }
+
+            val currentTimeStr = current.time
+            val currentHour = try {
+                currentTimeStr.substring(11, 13).toInt()
+            } catch (e: Exception) {
+                ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH")).toInt()
+            }
+
+            val startIndex = hourly.time.indexOfFirst {
+                try {
+                    it.substring(11, 13).toInt() >= currentHour
+                } catch (e: Exception) {
+                    false
+                }
+            }.let { if (it != -1) it else 0 }
+
+            rawCurrent = current
+            rawDaily = daily
+            rawHourly = hourly
+            elevationM = response.elevation
+            currentStartIndex = startIndex
 
             val isDay = current.isDay == 1
 
-            // 1. Update Background
             onBackgroundChange(WeatherUtils.getBackgroundData(current.weatherCode, isDay))
 
-            // 2. Xử lý Current
             val currentDisplay = CurrentDisplayData(
                 cityName,
                 convertTemp(current.temperature),
@@ -205,30 +223,10 @@ fun SearchWeatherResult(
                 isDay
             )
 
-            // 3. Xử lý Hourly (FIX LOGIC START INDEX)
-            val currentTimeStr = current.time
-            val currentHour = try {
-                currentTimeStr.substring(11, 13).toInt()
-            } catch (e: Exception) {
-                ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH")).toInt() // Dùng tạm giờ thiết bị nếu lỗi
-            }
-
-            // Tìm index đầu tiên có giờ >= currentHour
-            val startIndex = hourly.time.indexOfFirst {
-                try {
-                    it.substring(11, 13).toInt() >= currentHour
-                } catch (e: Exception) {
-                    false
-                }
-            }.let { if (it != -1) it else 0 } // Nếu không tìm thấy, bắt đầu từ 0
-
             val hourlyList = mutableListOf<HourlyDisplayItem>()
-
             for (i in startIndex until startIndex + 24) {
                 if (i >= hourly.time.size) break
                 val hourLabel = if (i == startIndex) "Bây giờ" else hourly.time.getOrElse(i) { "00h" }.substring(11, 13) + "h"
-
-                // Dùng getOrElse và convertTemp an toàn
                 val isHourDay = hourly.isDayList.getOrNull(i) == 1
                 val temp = convertTemp(hourly.temperatures.getOrNull(i))
                 val code = hourly.weatherCodes.getOrElse(i) { 0 }
@@ -236,15 +234,14 @@ fun SearchWeatherResult(
                 hourlyList.add(HourlyDisplayItem(hourLabel, WeatherUtils.getWeatherIcon(code, isHourDay), temp))
             }
 
-            // 4. Xử lý Daily (Đảm bảo an toàn Null)
             val hourlyTempsByDate = mutableMapOf<String, MutableList<Int>>()
             val hourlyCodesByDate = mutableMapOf<String, MutableList<Int>>()
 
             hourly.time.forEachIndexed { idx, timeStr ->
-                if (idx < hourly.temperatures.size && idx < hourly.weatherCodes.size) { // Kiểm tra chỉ mục
+                if (idx < hourly.temperatures.size && idx < hourly.weatherCodes.size) {
                     val dateKey = timeStr.substring(0, 10)
-                    hourlyTempsByDate.getOrPut(dateKey) { mutableListOf() }.add(convertTemp(hourly.temperatures.getOrNull(idx)))
-                    hourlyCodesByDate.getOrPut(dateKey) { mutableListOf() }.add(hourly.weatherCodes.getOrElse(idx) { 0 })
+                    hourlyTempsByDate.getOrPut(dateKey) { mutableListOf() }
+                        .add(convertTemp(hourly.temperatures.getOrNull(idx)))
                 }
             }
 
@@ -266,8 +263,8 @@ fun SearchWeatherResult(
                     icon = WeatherUtils.getWeatherIcon(daily.weatherCodes.getOrElse(index) { 0 }, true),
                     minTemp = convertTemp(daily.minTemperatures.getOrNull(index)),
                     maxTemp = convertTemp(daily.maxTemperatures.getOrNull(index)),
-                    rainProbability = daily.rainProbabilities?.getOrNull(index), // An toàn Null
-                    rainSumMm = daily.rainSums?.getOrNull(index), // An toàn Null
+                    rainProbability = daily.rainProbabilities?.getOrNull(index),
+                    rainSumMm = daily.rainSums?.getOrNull(index),
                     hourlyTemps = hourlyTempsByDate[dateStr] ?: emptyList(),
                     hourlyWeatherCodes = hourlyCodesByDate[dateStr] ?: emptyList()
                 ))
@@ -277,23 +274,20 @@ fun SearchWeatherResult(
 
             weatherData = WeatherUIData(currentDisplay, hourlyList, dailyItems, summary)
 
-
-
         } catch (e: Exception) {
             e.printStackTrace()
-            errorMessage = "Lỗi tải dữ liệu thời tiết: ${e.message ?: "Dữ liệu không hợp lệ"}"
+            errorMessage = "Lỗi tải dữ liệu: ${e.message}"
         } finally { isLoading = false }
     }
 
     if (isLoading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color.White) }
-    } else if (errorMessage != null) { // Hiển thị lỗi nếu có
+    } else if (errorMessage != null) {
         Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Icon(Icons.Default.Warning, contentDescription = null, tint = Color.Red, modifier = Modifier.size(48.dp))
             Spacer(Modifier.height(16.dp))
             Text("Không thể hiển thị thời tiết", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Text(errorMessage!!, color = Color.White.copy(0.7f), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
-            Text("Hãy thử tìm kiếm địa điểm khác.", color = Color.White.copy(0.7f), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
         }
     } else weatherData?.let { data ->
         Box(Modifier.fillMaxSize()) {
@@ -304,63 +298,65 @@ fun SearchWeatherResult(
                     .padding(top = 0.dp, bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Current
                 MainWeatherDisplay(data.current, tempUnit)
-                Spacer(Modifier.height(40.dp))
 
-                // Hourly
+                Spacer(Modifier.height(36.dp))
+
                 HourlyForecastSection(data.summary, data.hourly, tempUnit)
-                Spacer(Modifier.height(12.dp))
 
-                // Daily (Mới thêm)
+                Spacer(Modifier.height(24.dp))
+
                 DailyForecastSection(
                     items = data.daily,
                     unit = tempUnit,
-                    onDayClick = {
-                        selectedDay = it
-                        showDetailSheet = true
-                    }
+                    onDayClick = { day -> selectedDay = day; showDetailSheet = true }
                 )
-                Spacer(Modifier.height(12.dp))
 
-                rawCurrent?.let { c ->
-                    rawDaily?.let { d ->
-                        WeatherCardsSection(
-                            feelsLike = convertTemp(c.apparentTemperature ?: c.temperature),
-                            actual = convertTemp(c.temperature),
+                if (rawCurrent != null && rawDaily != null && rawHourly != null) {
+                    val c = rawCurrent!!
+                    val d = rawDaily!!
+                    val h = rawHourly!!
 
-                            dayMin = convertTemp(d.minTemperatures.firstOrNull() ?: c.temperature),
-                            dayMax = convertTemp(d.maxTemperatures.firstOrNull() ?: c.temperature),
+                    WeatherCardsSection(
+                        feelsLike = convertTemp(c.apparentTemperature ?: c.temperature),
+                        actual = convertTemp(c.temperature),
+                        dayMin = convertTemp(d.minTemperatures.firstOrNull() ?: 0.0),
+                        dayMax = convertTemp(d.maxTemperatures.firstOrNull() ?: 0.0),
+                        uvMax = d.uvIndexMax?.firstOrNull()?.toFloat(),
+                        windSpeedKmh = c.windSpeed10m?.roundToInt(),
+                        windGustKmh = c.windGusts10m?.roundToInt(),
+                        windDirDeg = c.windDirection10m?.roundToInt(),
+                        sunriseHHmm = toHHmm(d.sunrise?.firstOrNull()),
+                        sunsetHHmm = toHHmm(d.sunset?.firstOrNull()),
+                        rainMm = c.rain ?: c.precipitation,
+                        rainSumMm = d.rainSums?.firstOrNull() ?: d.rainSum?.firstOrNull(),
+                        snowfallMm = c.snowfall,
+                        humidityPercent = c.humidity,
 
-                            uvMax = d.uvIndexMax?.firstOrNull()?.toFloat(),
+                        pressureMslHPa = c.pressureMsl,
+                        pressureHPa = c.pressure,
+                        elevationM = elevationM,
 
-                            windSpeedKmh = c.windSpeed10m?.roundToInt(),
-                            windGustKmh = c.windGusts10m?.roundToInt(),
-                            windDirDeg = c.windDirection10m?.roundToInt(),
+                        cape = h.cape?.getOrNull(currentStartIndex),
 
-                            sunriseHHmm = toHHmm(d.sunrise?.firstOrNull()),
-                            sunsetHHmm  = toHHmm(d.sunset?.firstOrNull()),
+                        cloudCover = c.cloudCover,
+                        cloudLow = h.cloudCoverLow?.getOrNull(currentStartIndex),
+                        cloudMid = h.cloudCoverMid?.getOrNull(currentStartIndex),
+                        cloudHigh = h.cloudCoverHigh?.getOrNull(currentStartIndex),
 
-                            rainMm = c.rain ?: c.precipitation,
-                            rainSumMm = d.rainSums?.firstOrNull() ?: d.rainSum?.firstOrNull(),
-                            snowfallMm = d.snowfallSum?.firstOrNull() ?: c.snowfall,
+                        soilMoisture0_1 = h.soilMoisture0to1?.getOrNull(currentStartIndex),
+                        soilMoisture1_3 = h.soilMoisture3to9?.getOrNull(currentStartIndex),
+                        soilMoisture3_9 = h.soilMoisture9to27?.getOrNull(currentStartIndex),
 
-                            visibilityKm = c.visibility?.div(1000.0),
-                            humidityPercent = c.humidity ?: d.humidityMean?.firstOrNull(),
-                            pressureHPa = c.pressure,
-                            elevationM = elevationM
-                        )
-                    }
+                        dewPoint = c.dewPoint2m,
+                        sunshineDurationSeconds = d.sunshineDuration?.firstOrNull()
+                    )
                 }
+            }
+        }
 
-            }
-            if (showDetailSheet && selectedDay != null) {
-                WeatherDetailBottomSheet(
-                    day = selectedDay!!,
-                    unit = tempUnit,
-                    onDismiss = { showDetailSheet = false }
-                )
-            }
+        if (showDetailSheet && selectedDay != null) {
+            WeatherDetailBottomSheet(day = selectedDay!!, unit = tempUnit, onDismiss = { showDetailSheet = false })
         }
     }
 }
