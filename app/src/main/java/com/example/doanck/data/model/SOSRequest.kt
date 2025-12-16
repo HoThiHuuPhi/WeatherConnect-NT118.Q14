@@ -1,10 +1,12 @@
 package com.example.doanck.data.model
 
-import java.util.UUID
-
+import com.google.firebase.firestore.DocumentId
 
 data class SOSRequest(
-    val id: String = UUID.randomUUID().toString(),
+    // 👇 ĐỔI TÊN THÀNH docId ĐỂ TRÁNH XUNG ĐỘT
+    @DocumentId
+    val docId: String = "",
+
     val userId: String = "",
     val email: String = "",
     val phone: String = "",

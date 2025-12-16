@@ -2,6 +2,7 @@ package com.example.doanck.ui.main
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,10 +12,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.ArrowDropDown // Icon mũi tên xuống
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.FilterList // Icon lọc
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.NearMe
@@ -30,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.doanck.data.model.SOSRequest
+import com.google.firebase.auth.FirebaseAuth // ✅ THÊM IMPORT NÀY
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -37,7 +39,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// Hàm xóa dấu (Giữ nguyên)
+// Hàm xóa dấu
 fun removeAccents(str: String): String {
     try {
         val temp = java.text.Normalizer.normalize(str, java.text.Normalizer.Form.NFD)
@@ -59,11 +61,11 @@ fun SOSMonitorScreen(
     var isLoading by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
 
-    // 🟢 BIẾN CHO BỘ LỌC TỈNH
+    // Biến cho bộ lọc Tỉnh
     var selectedProvince by remember { mutableStateOf("Tất cả") }
-    var expandedProvinceMenu by remember { mutableStateOf(false) } // Trạng thái mở menu
+    var expandedProvinceMenu by remember { mutableStateOf(false) }
 
-    // 1. Lấy dữ liệu Realtime
+    // Lấy dữ liệu Realtime
     DisposableEffect(Unit) {
         val query = Firebase.firestore.collection("sos_requests")
             .orderBy("timestamp", Query.Direction.DESCENDING)
@@ -78,7 +80,7 @@ fun SOSMonitorScreen(
         onDispose { listener.remove() }
     }
 
-    // 2. Tự động trích xuất danh sách các Tỉnh có trong dữ liệu
+    // Tự động lấy danh sách tỉnh
     val provinceList = remember(sosList) {
         val provinces = sosList.mapNotNull { it.province }
             .filter { it.isNotBlank() }
@@ -87,9 +89,8 @@ fun SOSMonitorScreen(
         listOf("Tất cả") + provinces
     }
 
-    // 3. Logic Lọc danh sách (Kết hợp Tìm kiếm + Lọc Tỉnh)
+    // Logic Lọc
     val filteredList = sosList.filter { sos ->
-        // Điều kiện 1: Tìm kiếm từ khóa
         val matchSearch = if (searchQuery.isBlank()) true else {
             val query = removeAccents(searchQuery.trim())
             val provinceNorm = removeAccents(sos.province ?: "")
@@ -97,12 +98,9 @@ fun SOSMonitorScreen(
             val phoneRaw = sos.phone
             provinceNorm.contains(query) || messageNorm.contains(query) || phoneRaw.contains(query)
         }
-
-        // Điều kiện 2: Lọc theo Tỉnh
         val matchProvince = if (selectedProvince == "Tất cả") true else {
             sos.province == selectedProvince
         }
-
         matchSearch && matchProvince
     }
 
@@ -111,17 +109,12 @@ fun SOSMonitorScreen(
             Column(Modifier.background(Color.White)) {
                 TopAppBar(
                     title = { Text("Danh sách Cứu Trợ", fontWeight = FontWeight.Bold, color = Color.Red) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-                    },
+                    navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
                 )
 
-                // THANH TÌM KIẾM & BỘ LỌC
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    // Thanh Search
+                // Thanh tìm kiếm & Bộ lọc
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
@@ -130,13 +123,9 @@ fun SOSMonitorScreen(
                         leadingIcon = { Icon(Icons.Default.Search, null) },
                         trailingIcon = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = onOpenMapOverview) {
-                                    Icon(Icons.Default.Map, "Map", tint = Color(0xFF1976D2))
-                                }
+                                IconButton(onClick = onOpenMapOverview) { Icon(Icons.Default.Map, "Map", tint = Color(0xFF1976D2)) }
                                 if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { searchQuery = "" }) {
-                                        Icon(Icons.Default.Clear, "Clear")
-                                    }
+                                    IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Clear, "Clear") }
                                 }
                             }
                         },
@@ -146,7 +135,7 @@ fun SOSMonitorScreen(
 
                     Spacer(Modifier.height(8.dp))
 
-                    // 🟢 BỘ LỌC TỈNH (Dropdown)
+                    // Dropdown Tỉnh
                     Box(modifier = Modifier.fillMaxWidth()) {
                         OutlinedButton(
                             onClick = { expandedProvinceMenu = true },
@@ -167,7 +156,6 @@ fun SOSMonitorScreen(
                             Icon(Icons.Default.ArrowDropDown, null)
                         }
 
-                        // Menu xổ xuống
                         DropdownMenu(
                             expanded = expandedProvinceMenu,
                             onDismissRequest = { expandedProvinceMenu = false },
@@ -176,16 +164,9 @@ fun SOSMonitorScreen(
                             provinceList.forEach { province ->
                                 DropdownMenuItem(
                                     text = {
-                                        Text(
-                                            province,
-                                            fontWeight = if (province == selectedProvince) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (province == selectedProvince) Color(0xFF1976D2) else Color.Black
-                                        )
+                                        Text(province, fontWeight = if (province == selectedProvince) FontWeight.Bold else FontWeight.Normal, color = if (province == selectedProvince) Color(0xFF1976D2) else Color.Black)
                                     },
-                                    onClick = {
-                                        selectedProvince = province
-                                        expandedProvinceMenu = false
-                                    }
+                                    onClick = { selectedProvince = province; expandedProvinceMenu = false }
                                 )
                             }
                         }
@@ -197,27 +178,18 @@ fun SOSMonitorScreen(
         containerColor = Color(0xFFF2F4F8)
     ) { padding ->
         if (isLoading) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         } else if (filteredList.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.Search, null, tint = Color.Gray, modifier = Modifier.size(48.dp))
                     Spacer(Modifier.height(16.dp))
-                    Text(
-                        if (searchQuery.isNotEmpty()) "Không tìm thấy kết quả cho '$searchQuery'"
-                        else "Không có tin SOS nào tại $selectedProvince",
-                        color = Color.Gray
-                    )
+                    Text(if (searchQuery.isNotEmpty()) "Không tìm thấy kết quả" else "Không có tin SOS nào", color = Color.Gray)
                 }
             }
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp)
             ) {
@@ -229,7 +201,7 @@ fun SOSMonitorScreen(
     }
 }
 
-// ... (Giữ nguyên phần SOSCardItemNew, InfoRow, EmptyState bên dưới file cũ - không cần thay đổi)
+// 🟢 ĐÃ CẬP NHẬT: Thêm nút "XÓA TIN" cho chính chủ
 @Composable
 fun SOSCardItemNew(
     sos: SOSRequest,
@@ -238,16 +210,21 @@ fun SOSCardItemNew(
     val context = LocalContext.current
     val dateFormat = SimpleDateFormat("HH:mm - dd/MM", Locale.getDefault())
     val timeString = try { dateFormat.format(Date(sos.timestamp)) } catch (e: Exception) { "Vừa xong" }
-
     val provinceDisplay = if (!sos.province.isNullOrBlank()) "📍 ${sos.province}" else "📍 Chưa xác định"
+
+    // 👇 Kiểm tra xem tin này có phải của tôi không
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    val isMySOS = currentUser != null && currentUser.uid == sos.userId
 
     ElevatedCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        // Nếu là tin của mình -> Màu nền hơi vàng để dễ nhận biết
+        colors = CardDefaults.cardColors(containerColor = if (isMySOS) Color(0xFFFFF8E1) else Color.White),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -263,16 +240,48 @@ fun SOSCardItemNew(
                 }
             }
             Spacer(Modifier.height(8.dp))
+
+            // Địa điểm
             Text(provinceDisplay, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1976D2))
             Spacer(Modifier.height(8.dp))
+
+            // Nội dung
             Text(sos.message.ifBlank { "Không có nội dung mô tả" }, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1F2937), lineHeight = 24.sp)
             Spacer(Modifier.height(12.dp))
             Divider(color = Color.Gray.copy(alpha = 0.1f))
             Spacer(Modifier.height(12.dp))
-            InfoRow(icon = Icons.Default.Person, text = sos.email.ifBlank { "Ẩn danh" })
+
+            // Thông tin liên hệ
+            InfoRow(
+                icon = Icons.Default.Person,
+                text = if(isMySOS) "Bạn (Chính chủ)" else sos.email.ifBlank { "Ẩn danh" },
+                isBold = isMySOS
+            )
             Spacer(Modifier.height(6.dp))
             InfoRow(icon = Icons.Default.Call, text = sos.phone, isBold = true)
             Spacer(Modifier.height(16.dp))
+
+            // 🟢 NÚT "TÔI ĐÃ AN TOÀN" (Chỉ hiện nếu là chính chủ)
+            if (isMySOS) {
+                Button(
+                    onClick = {
+                        // Xóa tin khỏi Firebase dựa vào ID
+                        if (sos.docId.isNotEmpty()) {
+                            Firebase.firestore.collection("sos_requests").document(sos.docId).delete()
+                                .addOnSuccessListener {
+                                    Toast.makeText(context, "Đã cập nhật an toàn!", Toast.LENGTH_SHORT).show()
+                                }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)) // Màu xanh lá
+                ) {
+                    Text("TÔI ĐÃ ĐƯỢC CỨU (XÓA TIN)")
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+
+            // Các nút hành động khác
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(
                     onClick = {
