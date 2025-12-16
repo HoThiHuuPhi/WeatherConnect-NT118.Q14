@@ -1,9 +1,13 @@
 package com.example.doanck.ui.main
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -13,101 +17,35 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.platform.LocalDensity // Cần thiết để chuyển đổi Dp -> Int
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.DpOffset
-import androidx.compose.ui.unit.IntOffset // Cần thiết cho Popup offset
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import com.example.doanck.R
 
 enum class MainTab {
-    WEATHER,
-    COMMUNITY,
-    SEARCH,
-    SETTINGS
+    WEATHER, COMMUNITY, SEARCH, SETTINGS
 }
 
 private val SmokedGlassGradient = Brush.verticalGradient(
     colors = listOf(
-        Color(0xFF7BCBEC).copy(alpha = 0.25f),
-        Color(0xFFB0BEC5).copy(alpha = 0.10f)
+        Color(0xFFD0F0FF).copy(alpha = 0.60f),
+        Color(0xFFE6F7FF).copy(alpha = 0.30f)
     )
 )
 
-private val SoftBorderGradient = Brush.linearGradient(
+private val FloatingMenuGradient = Brush.verticalGradient(
     colors = listOf(
-        Color.White.copy(alpha = 0.35f),
-        Color.White.copy(alpha = 0.05f)
+        Color(0xFF7BCBEC).copy(alpha = 0.95f),
+        Color(0xFF90A4AE).copy(alpha = 0.90f)
     )
 )
-
-private val MapMenuSmokedGradient = Brush.verticalGradient(
-    colors = listOf(
-        Color(0xFF7BCBEC).copy(alpha = 0.25f),
-        Color(0xFFB0BEC5).copy(alpha = 0.10f)
-    )
-)
-
-@Composable
-fun SmokedDropdownMenu(
-    expanded: Boolean,
-    onDismissRequest: () -> Unit,
-    offset: DpOffset = DpOffset(0.dp, 8.dp),
-    content: @Composable ColumnScope.() -> Unit
-) {
-    DropdownMenu(
-        expanded = expanded,
-        onDismissRequest = onDismissRequest,
-        offset = offset,
-        modifier = Modifier
-            .background(MapMenuSmokedGradient, RoundedCornerShape(4.dp))
-    ) {
-        Column(
-            modifier = Modifier
-                .width(IntrinsicSize.Max)
-                .padding(vertical = 4.dp),
-            content = content
-        )
-    }
-}
-
-
-@Composable
-private fun MenuItemContent(
-    text: String,
-    iconRes: Int,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Image(
-            painter = painterResource(id = iconRes),
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text = text,
-            color = Color(0xFF1E3A8A),
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Normal
-        )
-    }
-}
 
 @Composable
 fun MainTopNavBar(
@@ -115,6 +53,8 @@ fun MainTopNavBar(
     onOpenWeatherMap: () -> Unit,
     onOpenRescueMap: () -> Unit
 ) {
+    val density = LocalDensity.current
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -124,35 +64,37 @@ fun MainTopNavBar(
         var mapMenuExpanded by remember { mutableStateOf(false) }
 
         Box(
-            modifier = Modifier
-                .size(66.dp)
-                .clip(CircleShape)
-                .background(SmokedGlassGradient)
-                .clickable { mapMenuExpanded = true },
+            modifier = Modifier.wrapContentSize(),
             contentAlignment = Alignment.Center
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.ic_map),
-                contentDescription = "Bản đồ",
-                modifier = Modifier.size(28.dp),
-                colorFilter = ColorFilter.tint(Color.White)
-            )
-
-            SmokedDropdownMenu(
-                expanded = mapMenuExpanded,
-                onDismissRequest = { mapMenuExpanded = false }
+            Box(
+                modifier = Modifier
+                    .size(66.dp)
+                    .clip(CircleShape)
+                    .background(SmokedGlassGradient)
+                    .clickable { mapMenuExpanded = !mapMenuExpanded },
+                contentAlignment = Alignment.Center
             ) {
-                MenuItemContent(
-                    text = "Bản đồ thời tiết",
-                    iconRes = R.drawable.ic_weather_map,
-                    onClick = { mapMenuExpanded = false; onOpenWeatherMap() }
+                Image(
+                    painter = painterResource(id = R.drawable.ic_map),
+                    contentDescription = "Bản đồ",
+                    modifier = Modifier.size(28.dp),
+                    colorFilter = ColorFilter.tint(Color.White)
                 )
-
-                MenuItemContent(
-                    text = "Bản đồ cứu trợ",
-                    iconRes = R.drawable.ic_sos_map,
-                    onClick = { mapMenuExpanded = false; onOpenRescueMap() }
-                )
+            }
+            if (mapMenuExpanded) {
+                Popup(
+                    // CĂN LỀ TRÁI (TopStart thay vì TopCenter)
+                    alignment = Alignment.TopStart,
+                    // số âm nhỏ hơn là đi xuống
+                    offset = IntOffset(0, with(density) { -112.dp.roundToPx() }),
+                    onDismissRequest = { mapMenuExpanded = false }
+                ) {
+                    FloatingMenuContent(
+                        onOpenWeatherMap = { mapMenuExpanded = false; onOpenWeatherMap() },
+                        onOpenRescueMap = { mapMenuExpanded = false; onOpenRescueMap() }
+                    )
+                }
             }
         }
 
@@ -172,30 +114,83 @@ fun MainTopNavBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                NavPillItem(
-                    iconRes = R.drawable.ic_tab_weather,
-                    label = "Thời tiết",
-                    onClick = { onTabSelected(MainTab.WEATHER) }
-                )
-                NavPillItem(
-                    iconRes = R.drawable.ic_tab_chat,
-                    label = "Chat",
-                    onClick = { onTabSelected(MainTab.COMMUNITY) }
-                )
-                NavPillItem(
-                    iconRes = R.drawable.ic_tab_search,
-                    label = "Tìm kiếm",
-                    onClick = { onTabSelected(MainTab.SEARCH) }
-                )
-                NavPillItem(
-                    iconRes = R.drawable.ic_tab_settings,
-                    label = "Cài đặt",
-                    onClick = { onTabSelected(MainTab.SETTINGS) }
-                )
+                NavPillItem(R.drawable.ic_tab_weather, "Thời tiết") { onTabSelected(MainTab.WEATHER) }
+                NavPillItem(R.drawable.ic_tab_chat, "Chat") { onTabSelected(MainTab.COMMUNITY) }
+                NavPillItem(R.drawable.ic_tab_search, "Tìm kiếm") { onTabSelected(MainTab.SEARCH) }
+                NavPillItem(R.drawable.ic_tab_settings, "Cài đặt") { onTabSelected(MainTab.SETTINGS) }
             }
         }
     }
 }
+
+@Composable
+private fun FloatingMenuContent(
+    onOpenWeatherMap: () -> Unit,
+    onOpenRescueMap: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.Start,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        FloatingOptionItem(
+            text = "Bản đồ thời tiết",
+            iconRes = R.drawable.ic_weather_map,
+            onClick = onOpenWeatherMap
+        )
+
+        FloatingOptionItem(
+            text = "Bản đồ cứu trợ",
+            iconRes = R.drawable.ic_sos_map,
+            onClick = onOpenRescueMap
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+    }
+}
+
+@Composable
+private fun FloatingOptionItem(
+    text: String,
+    iconRes: Int,
+    onClick: () -> Unit
+) {
+    AnimatedVisibility(
+        visible = true,
+        enter = slideInVertically(
+            initialOffsetY = { 40 },
+            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+        ) + fadeIn(),
+        exit = fadeOut()
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(24.dp))
+                .background(FloatingMenuGradient)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Image(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = text,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                style = LocalTextStyle.current.copy(
+                    shadow = androidx.compose.ui.graphics.Shadow(
+                        color = Color.Black.copy(alpha = 0.3f),
+                        blurRadius = 4f
+                    )
+                )
+            )
+        }
+    }
+}
+
 
 @Composable
 private fun RowScope.NavPillItem(
@@ -223,12 +218,11 @@ private fun RowScope.NavPillItem(
         Text(
             text = label,
             color = Color.White,
-            fontSize = 13.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
-            letterSpacing = 0.3.sp,
             style = LocalTextStyle.current.copy(
                 shadow = androidx.compose.ui.graphics.Shadow(
-                    color = Color.Black.copy(alpha = 0.2f),
+                    color = Color.Black.copy(alpha = 0.3f),
                     blurRadius = 4f
                 )
             )
