@@ -164,7 +164,6 @@ fun MainTopNavBar(
                 .height(66.dp)
                 .clip(RoundedCornerShape(100))
                 .background(SmokedGlassGradient)
-                .border(BorderStroke(1.dp, SoftBorderGradient), RoundedCornerShape(100))
         ) {
             Row(
                 modifier = Modifier
