@@ -33,19 +33,9 @@ enum class MainTab {
     WEATHER, COMMUNITY, SEARCH, SETTINGS
 }
 
-private val SmokedGlassGradient = Brush.verticalGradient(
-    colors = listOf(
-        Color(0xFFD0F0FF).copy(alpha = 0.60f),
-        Color(0xFFE6F7FF).copy(alpha = 0.30f)
-    )
-)
+private val HourlyGlassDark = Color(0xFF020617).copy(alpha = 0.4f)
 
-private val FloatingMenuGradient = Brush.verticalGradient(
-    colors = listOf(
-        Color(0xFF7BCBEC).copy(alpha = 0.95f),
-        Color(0xFF90A4AE).copy(alpha = 0.90f)
-    )
-)
+private val FloatingMenuGradient = Color(0xFF1D1E23).copy(alpha = 0.9f)
 
 @Composable
 fun MainTopNavBar(
@@ -63,6 +53,7 @@ fun MainTopNavBar(
     ) {
         var mapMenuExpanded by remember { mutableStateOf(false) }
 
+        // --- BUTTON BẢN ĐỒ ---
         Box(
             modifier = Modifier.wrapContentSize(),
             contentAlignment = Alignment.Center
@@ -71,7 +62,7 @@ fun MainTopNavBar(
                 modifier = Modifier
                     .size(66.dp)
                     .clip(CircleShape)
-                    .background(SmokedGlassGradient)
+                    .background(HourlyGlassDark)
                     .clickable { mapMenuExpanded = !mapMenuExpanded },
                 contentAlignment = Alignment.Center
             ) {
@@ -84,10 +75,8 @@ fun MainTopNavBar(
             }
             if (mapMenuExpanded) {
                 Popup(
-                    // CĂN LỀ TRÁI (TopStart thay vì TopCenter)
                     alignment = Alignment.TopStart,
-                    // số âm nhỏ hơn là đi xuống
-                    offset = IntOffset(0, with(density) { -112.dp.roundToPx() }),
+                    offset = IntOffset(0, with(density) { -136.dp.roundToPx() }),
                     onDismissRequest = { mapMenuExpanded = false }
                 ) {
                     FloatingMenuContent(
@@ -100,12 +89,13 @@ fun MainTopNavBar(
 
         Spacer(Modifier.width(12.dp))
 
+        // --- THANH TAB NAVIGATION ---
         Box(
             modifier = Modifier
                 .weight(1f)
                 .height(66.dp)
                 .clip(RoundedCornerShape(100))
-                .background(SmokedGlassGradient)
+                .background(HourlyGlassDark)
         ) {
             Row(
                 modifier = Modifier
@@ -143,7 +133,7 @@ private fun FloatingMenuContent(
             iconRes = R.drawable.ic_sos_map,
             onClick = onOpenRescueMap
         )
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
     }
 }
 
@@ -163,10 +153,10 @@ private fun FloatingOptionItem(
     ) {
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(FloatingMenuGradient)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Image(

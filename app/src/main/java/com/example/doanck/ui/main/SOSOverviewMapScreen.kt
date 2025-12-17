@@ -1,59 +1,93 @@
 package com.example.doanck.ui.main
 
-import android.content.Context
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.example.doanck.data.model.SOSRequest
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
-import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.FolderOverlay
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
-import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
-import java.io.File
+import vn.vietmap.vietmapsdk.Vietmap
+import vn.vietmap.vietmapsdk.annotations.MarkerOptions
+import vn.vietmap.vietmapsdk.camera.CameraPosition
+import vn.vietmap.vietmapsdk.camera.CameraUpdateFactory
+import vn.vietmap.vietmapsdk.geometry.LatLng
+import vn.vietmap.vietmapsdk.location.LocationComponentActivationOptions
+import vn.vietmap.vietmapsdk.location.engine.LocationEngineDefault
+import vn.vietmap.vietmapsdk.location.modes.CameraMode
+import vn.vietmap.vietmapsdk.location.modes.RenderMode
+import vn.vietmap.vietmapsdk.maps.MapView
+import vn.vietmap.vietmapsdk.maps.Style
+import vn.vietmap.vietmapsdk.maps.VietMapGL
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RescueMapScreen(
+fun SOSOverviewMapScreen(
     onBack: () -> Unit,
     onOpenList: () -> Unit,
-    onOpenSOSDetail: (Double, Double, String) -> Unit
+    onOpenRescueMap: (Double, Double, String) -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    remember { Vietmap.getInstance(context) }
+
     var sosList by remember { mutableStateOf<List<SOSRequest>>(emptyList()) }
+    var mapView by remember { mutableStateOf<MapView?>(null) }
+    var vietMapGL by remember { mutableStateOf<VietMapGL?>(null) }
 
     var selectedSOS by remember { mutableStateOf<SOSRequest?>(null) }
     var showInfoSheet by remember { mutableStateOf(false) }
 
-    val SkyBlueChat = Color(0xFF87CEFA)
+    // Quản lý quyền vị trí
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        )
+    }
 
-    // Lắng nghe SOS realtime
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { granted -> hasLocationPermission = granted }
+    )
+
+    LaunchedEffect(Unit) {
+        if (!hasLocationPermission) {
+            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+    }
+
+    // 2. Lắng nghe SOS realtime từ Firebase
     DisposableEffect(Unit) {
         val listener = Firebase.firestore.collection("sos_requests")
             .addSnapshotListener { snapshot, e ->
@@ -63,71 +97,36 @@ fun RescueMapScreen(
         onDispose { listener.remove() }
     }
 
-    // Init osmdroid + MapView
-    val mapView = remember {
-        val cfg = Configuration.getInstance()
-        cfg.load(context, context.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
-        cfg.userAgentValue = context.packageName
-
-        val base = File(context.filesDir, "osmdroid").apply { mkdirs() }
-        val tile = File(base, "tile").apply { mkdirs() }
-        cfg.osmdroidBasePath = base
-        cfg.osmdroidTileCache = tile
-
-        MapView(context).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
-            setMultiTouchControls(true)
-            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-            // Tăng zoom lên 7.5 theo yêu cầu (nhìn rõ hơn)
-            controller.setZoom(7.5)
-            controller.setCenter(GeoPoint(16.0471, 108.2068))
-        }
-    }
-
-    // Overlays
-    val myLocationOverlay = remember {
-        MyLocationNewOverlay(GpsMyLocationProvider(context), mapView).apply {
-            enableMyLocation()
-        }
-    }
-    val sosOverlay = remember { FolderOverlay() }
-
-    LaunchedEffect(Unit) {
-        if (!mapView.overlays.contains(myLocationOverlay)) {
-            mapView.overlays.add(myLocationOverlay)
-        }
-        if (!mapView.overlays.contains(sosOverlay)) {
-            mapView.overlays.add(sosOverlay)
-        }
-    }
-
-    // Cập nhật Markers
-    LaunchedEffect(sosList) {
-        sosOverlay.items.clear()
-        sosList.forEach { sos ->
-            val marker = Marker(mapView).apply {
-                position = GeoPoint(sos.lat, sos.lon)
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                title = "SĐT: ${sos.phone}"
-                snippet = sos.message
-                subDescription = "Nhấn để xem chi tiết"
-                setOnMarkerClickListener { m, _ ->
-                    selectedSOS = sos
-                    showInfoSheet = true
-                    true
-                }
+    // 3. Cập nhật markers lên bản đồ
+    LaunchedEffect(sosList, vietMapGL) {
+        vietMapGL?.let { map ->
+            map.clear() // Xóa marker cũ
+            sosList.forEach { sos ->
+                map.addMarker(
+                    MarkerOptions()
+                        .position(LatLng(sos.lat, sos.lon))
+                        .title(if (sos.phone.isNotEmpty()) sos.phone else "SOS")
+                        .snippet(sos.message ?: "Cần hỗ trợ!")
+                )
             }
-            sosOverlay.add(marker)
         }
-        mapView.invalidate()
     }
 
-    // Lifecycle
-    DisposableEffect(Unit) {
-        mapView.onResume()
+    // 4. Lifecycle observer cho MapView
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> mapView?.onStart()
+                Lifecycle.Event.ON_RESUME -> mapView?.onResume()
+                Lifecycle.Event.ON_PAUSE -> mapView?.onPause()
+                Lifecycle.Event.ON_STOP -> mapView?.onStop()
+                Lifecycle.Event.ON_DESTROY -> mapView?.onDestroy()
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            mapView.onPause()
-            mapView.onDetach()
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -135,17 +134,79 @@ fun RescueMapScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
         ) {
-            // BẢN ĐỒ
-            AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+            // --- BẢN ĐỒ VIETMAP ---
+            AndroidView(
+                factory = { ctx ->
+                    MapView(ctx).apply {
+                        onCreate(null)
+                        getMapAsync { map ->
+                            vietMapGL = map
 
-            // HEADER
+                            map.setStyle(
+                                Style.Builder()
+                                    .fromUri("https://maps.vietmap.vn/api/maps/light/styles.json?apikey=1b2a23b390ba308ebdc68c0e33e0090d339f9fcd3a4cfb42")
+                            ) { style ->
+                                val initialPosition = CameraPosition.Builder()
+                                    .target(LatLng(16.4637, 107.5908))
+                                    .zoom(4.0)
+                                    .build()
+                                map.cameraPosition = initialPosition
+
+                                if (hasLocationPermission) {
+                                    try {
+                                        val locationComponent = map.locationComponent
+                                        locationComponent.activateLocationComponent(
+                                            LocationComponentActivationOptions.builder(ctx, style).build()
+                                        )
+                                        locationComponent.isLocationComponentEnabled = true
+                                        locationComponent.cameraMode = CameraMode.NONE
+                                        locationComponent.renderMode = RenderMode.COMPASS
+                                        locationComponent.locationEngine = LocationEngineDefault.getDefaultLocationEngine(ctx)
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                }
+                            }
+
+                            // Xử lý sự kiện click marker
+                            map.setOnMarkerClickListener { marker ->
+                                val clickedSOS = sosList.find { sos ->
+                                    val latDiff = kotlin.math.abs(sos.lat - marker.position.latitude)
+                                    val lonDiff = kotlin.math.abs(sos.lon - marker.position.longitude)
+                                    latDiff < 0.0001 && lonDiff < 0.0001
+                                }
+
+                                if (clickedSOS != null) {
+                                    selectedSOS = clickedSOS
+                                    showInfoSheet = true
+
+                                    vietMapGL?.animateCamera(
+                                        CameraUpdateFactory.newCameraPosition(
+                                            CameraPosition.Builder()
+                                                .target(LatLng(clickedSOS.lat, clickedSOS.lon))
+                                                .zoom(9.0)
+                                                .build()
+                                        )
+                                    )
+                                } else {
+                                    Toast.makeText(ctx, marker.title, Toast.LENGTH_SHORT).show()
+                                }
+                                true
+                            }
+                        }
+                        mapView = this
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // --- HEADER ---
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
-                    .padding(top = 0.dp, start = 16.dp, end = 16.dp)
+                    .padding(top = 16.dp, start = 16.dp, end = 16.dp)
                     .fillMaxWidth()
                     .shadow(12.dp, RoundedCornerShape(20.dp))
                     .background(
@@ -163,7 +224,7 @@ fun RescueMapScreen(
                     modifier = Modifier.padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // NÚT BACK
+                    // Nút Back
                     Surface(
                         modifier = Modifier.size(40.dp),
                         shape = CircleShape,
@@ -171,17 +232,12 @@ fun RescueMapScreen(
                         shadowElevation = 4.dp
                     ) {
                         IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = Color(0xFF1976D2)
-                            )
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color(0xFF1976D2))
                         }
                     }
 
                     Spacer(Modifier.width(12.dp))
 
-                    // TITLE
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Bản đồ cứu trợ",
@@ -197,238 +253,139 @@ fun RescueMapScreen(
                         )
                     }
 
-                    // NÚT REFRESH (Đặt lại góc nhìn)
+                    // Nút Refresh
                     Surface(
                         modifier = Modifier.size(40.dp),
                         shape = CircleShape,
                         color = Color.White.copy(alpha = 0.9f),
                         shadowElevation = 4.dp
                     ) {
-                        IconButton(
-                            onClick = {
-                                mapView.controller.setZoom(7.5)
-                                mapView.controller.animateTo(GeoPoint(16.0471, 108.2068))
-                            }
-                        ) {
-                            Icon(
-                                Icons.Default.Refresh,
-                                contentDescription = "Đặt lại góc nhìn",
-                                tint = Color(0xFF1976D2)
+                        IconButton(onClick = {
+                            vietMapGL?.animateCamera(
+                                CameraUpdateFactory.newCameraPosition(
+                                    CameraPosition.Builder()
+                                        .target(LatLng(16.4637, 107.5908))
+                                        .zoom(4.0)
+                                        .build()
+                                )
                             )
+                        }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color(0xFF1976D2))
                         }
                     }
                 }
             }
 
-            // NÚT ZOOM IN/OUT
             Column(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .shadow(6.dp, CircleShape)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                listOf(Color(0xFFE3F2FD), Color(0xFFBBDEFB))
-                            ),
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
+                // Zoom In
+                SmallFloatingActionButton(
+                    onClick = { vietMapGL?.animateCamera(CameraUpdateFactory.zoomIn()) },
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF1976D2)
                 ) {
-                    IconButton(onClick = { mapView.controller.zoomIn() }) {
-                        Icon(
-                            Icons.Default.Add,
-                            "Phóng to",
-                            modifier = Modifier.size(24.dp),
-                            tint = Color(0xFF1565C0)
-                        )
-                    }
+                    Icon(Icons.Default.Add, contentDescription = "Zoom In")
                 }
 
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .shadow(6.dp, CircleShape)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                listOf(Color(0xFFE3F2FD), Color(0xFFBBDEFB))
-                            ),
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
+                // Zoom Out
+                SmallFloatingActionButton(
+                    onClick = { vietMapGL?.animateCamera(CameraUpdateFactory.zoomOut()) },
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF1976D2)
                 ) {
-                    IconButton(onClick = { mapView.controller.zoomOut() }) {
-                        Icon(
-                            Icons.Default.Remove,
-                            "Thu nhỏ",
-                            modifier = Modifier.size(24.dp),
-                            tint = Color(0xFF1565C0)
-                        )
-                    }
+                    Icon(Icons.Default.Remove, contentDescription = "Zoom Out")
                 }
             }
 
-            // CỘT CHỨA NÚT ĐỊNH VỊ VÀ DANH SÁCH (Góc dưới phải)
+            // --- NÚT DƯỚI CÙNG (Vị trí tôi & Danh sách) ---
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
                     .padding(16.dp),
-                horizontalAlignment = Alignment.End, // Căn lề phải cho cột
-                verticalArrangement = Arrangement.spacedBy(16.dp) // Khoảng cách giữa 2 cụm nút
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // --- CỤM NÚT ĐỊNH VỊ (Nằm trên) ---
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Label Text: Vị trí của tôi
-                    Surface(
-                        color = Color.White,
-                        shape = RoundedCornerShape(8.dp),
-                        shadowElevation = 6.dp,
-                        modifier = Modifier.clickable {
-                            val p = myLocationOverlay.myLocation
-                            if (p != null) {
-                                mapView.post {
-                                    mapView.controller.setZoom(15.0)
-                                    mapView.controller.animateTo(p)
-                                }
-                            }
-                        }
-                    ) {
-                        Text(
-                            text = "Vị trí của tôi",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1565C0),
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                        )
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        vietMapGL?.locationComponent?.lastKnownLocation?.let { location ->
+                            val position = CameraPosition.Builder()
+                                .target(LatLng(location.latitude, location.longitude))
+                                .zoom(15.0)
+                                .build()
+                            vietMapGL?.animateCamera(CameraUpdateFactory.newCameraPosition(position))
+                        } ?: Toast.makeText(context, "Chưa lấy được vị trí", Toast.LENGTH_SHORT).show()
+                    },
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF1976D2),
+                    icon = {
+                        Icon(Icons.Default.MyLocation, contentDescription = null)
+                    },
+                    text = {
+                        Text("Vị trí của tôi")
                     }
+                )
 
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // Floating Button: Định vị
-                    FloatingActionButton(
-                        onClick = {
-                            val p = myLocationOverlay.myLocation
-                            if (p != null) {
-                                mapView.post {
-                                    mapView.controller.setZoom(15.0)
-                                    mapView.controller.animateTo(p)
-                                }
-                            }
-                        },
-                        containerColor = Color.White,
-                        contentColor = Color(0xFF1976D2),
-                        elevation = FloatingActionButtonDefaults.elevation(
-                            defaultElevation = 6.dp,
-                            pressedElevation = 10.dp
-                        )
-                    ) {
-                        Icon(
-                            Icons.Default.MyLocation,
-                            contentDescription = "Vị trí của tôi",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-
-                // --- CỤM NÚT DANH SÁCH (Nằm dưới) ---
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Label Text: Danh sách
-                    Surface(
-                        color = Color.White,
-                        shape = RoundedCornerShape(8.dp),
-                        shadowElevation = 6.dp,
-                        modifier = Modifier.clickable { onOpenList() }
-                    ) {
-                        Text(
-                            text = "Danh sách cứu hộ/ Cứu trợ",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1565C0),
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // Floating Button: Danh sách
-                    FloatingActionButton(
-                        onClick = onOpenList,
-                        containerColor = Color(0xFF1976D2),
-                        contentColor = Color.White,
-                        elevation = FloatingActionButtonDefaults.elevation(
-                            defaultElevation = 8.dp,
-                            pressedElevation = 12.dp
-                        )
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.List,
-                            contentDescription = "Xem danh sách",
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                }
+                // Nút Danh sách SOS
+                ExtendedFloatingActionButton(
+                    onClick = onOpenList,
+                    containerColor = Color(0xFF1976D2),
+                    contentColor = Color.White,
+                    icon = { Icon(Icons.Default.List, contentDescription = null) },
+                    text = { Text("Danh sách") }
+                )
             }
+        }
 
-            // BOTTOM SHEET CHI TIẾT
-            if (showInfoSheet && selectedSOS != null) {
-                val s = selectedSOS!!
-                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-                ModalBottomSheet(
-                    onDismissRequest = { showInfoSheet = false },
-                    sheetState = sheetState,
-                    containerColor = Color.White
+        // --- BOTTOM SHEET CHI TIẾT ---
+        if (showInfoSheet && selectedSOS != null) {
+            ModalBottomSheet(
+                onDismissRequest = { showInfoSheet = false },
+                containerColor = Color.White
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
                 ) {
-                    // Header gradient
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(SkyBlueChat, Color(0xFFB0E0E6), Color(0xFFFFFACD))
-                                )
-                            )
-                            .padding(16.dp)
-                    ) {
+                    Text(
+                        text = "Thông tin cứu trợ",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFD32F2F)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("SĐT:", fontWeight = FontWeight.SemiBold, modifier = Modifier.width(80.dp))
+                        Text(selectedSOS!!.phone, color = Color.Black)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text("Mô tả:", fontWeight = FontWeight.SemiBold, modifier = Modifier.width(80.dp))
                         Text(
-                            "📍 Thông tin SOS",
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1565C0),
-                            style = MaterialTheme.typography.titleMedium
+                            text = selectedSOS!!.message ?: "Không có nội dung",
+                            color = Color.DarkGray
                         )
                     }
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Text("SĐT: ${s.phone}", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
-                        Spacer(Modifier.height(6.dp))
-                        Text("Mô tả: ${s.message ?: "Không có thông tin"}", color = Color(0xFF424242))
-
-                        Spacer(Modifier.height(24.dp))
-
-                        Button(
-                            onClick = {
-                                showInfoSheet = false
-                                val safeName = "SĐT: ${s.phone}".replace("/", "-")
-                                onOpenSOSDetail(s.lat, s.lon, safeName)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
-                        ) {
-                            Text("Xem bản đồ cứu hộ", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                        }
-
-                        Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = {
+                            showInfoSheet = false
+                            onOpenRescueMap(selectedSOS!!.lat, selectedSOS!!.lon, selectedSOS!!.phone)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
+                    ) {
+                        Icon(Icons.Default.Map, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Mở bản đồ cứu hộ")
                     }
                 }
             }

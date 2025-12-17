@@ -16,7 +16,7 @@ import com.example.doanck.ui.chat.CommunityChatScreen
 import com.example.doanck.ui.login.LoginScreen
 import com.example.doanck.ui.main.MainScreen
 import com.example.doanck.ui.main.RescueMapScreen
-import com.example.doanck.ui.main.SOSMapScreen
+import com.example.doanck.ui.main.SOSOverviewMapScreen
 import com.example.doanck.ui.main.SOSMonitorScreen
 import com.example.doanck.ui.main.SearchScreen
 import com.example.doanck.ui.main.SettingsScreen
@@ -90,9 +90,7 @@ fun AppNav(
             )
         }
 
-        // ============================================
         // CÁC TÍNH NĂNG KHÁC
-        // ============================================
         composable("settings") {
             SettingsScreen(
                 appDataStore = appDataStore,
@@ -118,42 +116,36 @@ fun AppNav(
             WeatherMapScreen(onBack = { navController.popBackStack() })
         }
 
-        // ============================================
         // HỆ THỐNG CỨU TRỢ (3 ROUTES)
-        // ============================================
 
-        // 1. BẢN ĐỒ TỔNG QUAN - Hiển thị tất cả các ca SOS
+        // BẢN ĐỒ TỔNG QUAN - Hiển thị tất cả các ca SOS
         composable("rescue_map_overview") {
-            RescueMapScreen(
+            SOSOverviewMapScreen(
                 onBack = { navController.popBackStack() },
                 onOpenList = { navController.navigate("rescue_list") },
-                onOpenSOSDetail = { lat, lon, name ->
-                    val cleanName = name.ifBlank { "SOS" }.replace("/", "-")
-                    navController.navigate("sos_map/$lat/$lon/$cleanName")
+                onOpenRescueMap = { lat, lon, name ->
+                    val safeName = name.ifBlank { "SOS" }.replace("/", "-")
+                    navController.navigate("rescue_map/$lat/$lon/$safeName")
                 }
             )
         }
 
-
-        // 2. DANH SÁCH CÁC CA CỨU HỘ
+        // DANH SÁCH CÁC CA CỨU HỘ
         composable("rescue_list") {
             SOSMonitorScreen(
-                onBack = { navController.popBackStack() }, // Quay về Bản đồ
+                onBack = { navController.popBackStack() },
                 onNavigateToMap = { lat, lon, name ->
-                    val safeName = if (name.isNotBlank()) name else "SOS"
-                    val cleanName = safeName.replace("/", "-")
-                    navController.navigate("sos_map/$lat/$lon/$cleanName")
+                    val safeName = name.ifBlank { "SOS" }.replace("/", "-")
+                    navController.navigate("rescue_map/$lat/$lon/$safeName")
                 },
-                // NÚT "XEM BẢN ĐỒ" → QUAY VỀ BẢN ĐỒ TỔNG QUAN
                 onOpenMapOverview = {
-                    navController.popBackStack() // Quay về rescue_map_overview
+                    navController.popBackStack("rescue_map_overview", inclusive = false)
                 }
             )
         }
 
-        // 3. BẢN ĐỒ CHI TIẾT - Chỉ đường cho 1 người cụ thể
         composable(
-            route = "sos_map/{lat}/{lon}/{name}",
+            route = "rescue_map/{lat}/{lon}/{name}",
             arguments = listOf(
                 navArgument("lat") { type = NavType.StringType },
                 navArgument("lon") { type = NavType.StringType },
@@ -162,14 +154,14 @@ fun AppNav(
         ) { backStackEntry ->
             val latStr = backStackEntry.arguments?.getString("lat") ?: "0.0"
             val lonStr = backStackEntry.arguments?.getString("lon") ?: "0.0"
-            val name = backStackEntry.arguments?.getString("name") ?: "Người cần cứu"
+            val name = backStackEntry.arguments?.getString("name") ?: "SOS"
 
-            SOSMapScreen(
+            RescueMapScreen(
                 lat = latStr.toDoubleOrNull() ?: 0.0,
                 lon = lonStr.toDoubleOrNull() ?: 0.0,
                 name = name,
                 onBack = { navController.popBackStack() },
-                onOpenRescueMap = { navController.navigate("rescue_map_overview") } // ✅ thêm dòng này
+                onOpenOverview = { navController.popBackStack("rescue_map_overview", false) }
             )
         }
     }

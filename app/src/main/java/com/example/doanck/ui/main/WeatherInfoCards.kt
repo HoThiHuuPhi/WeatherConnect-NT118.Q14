@@ -35,10 +35,10 @@ import java.time.LocalTime
 import androidx.compose.ui.graphics.StrokeCap
 import kotlin.math.sin
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.text.style.TextOverflow
 
 private val GlassDark = Color(0xFF020617).copy(alpha = 0.40f)
 private val Track = Color.White.copy(alpha = 0.20f)
-private val Fill = Color.White.copy(alpha = 0.55f)
 
 @Composable
 fun WeatherCardsSection(
@@ -76,6 +76,12 @@ fun WeatherCardsSection(
     val colGap = 24.dp
 
     Column(modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+
+        if (snowfallMm != null && snowfallMm > 0) {
+            Spacer(Modifier.height(sectionGap))
+            SnowfallCard(snowfallMm, Modifier.fillMaxWidth())
+        }
+
         Spacer(Modifier.height(sectionGap))
 
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
@@ -128,11 +134,6 @@ fun WeatherCardsSection(
         Spacer(Modifier.height(sectionGap))
 
         SoilMoistureCard(soilMoisture0_1, soilMoisture1_3, soilMoisture3_9, Modifier.fillMaxWidth())
-
-        if (snowfallMm != null && snowfallMm > 0) {
-            Spacer(Modifier.height(sectionGap))
-            SnowfallCard(snowfallMm, Modifier.fillMaxWidth())
-        }
     }
 }
 
@@ -160,10 +161,20 @@ private fun FeelsLikeCard(feelsLike: Int, actual: Int, dayMin: Int, dayMax: Int,
     FrostedCard(modifier) {
         CardHeader(Icons.Outlined.Thermostat, "CẢM NHẬN")
         Spacer(Modifier.height(10.dp))
-        Text(text = "$feelsLike°", color = Color.White, fontSize = 44.sp, fontWeight = FontWeight.SemiBold)
+
+        Text(
+            text = "$feelsLike°",
+            color = Color.White,
+            fontSize = 44.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Visible
+        )
+
         Text(text = "Thực tế: $actual°", color = Color.White.copy(0.9f), fontSize = 16.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(10.dp))
-        TemperatureDifferenceBar(actual, feelsLike, actual - feelsLike, Modifier.fillMaxWidth())
+        TemperatureDifferenceBar(actual, feelsLike, feelsLike - actual, Modifier.fillMaxWidth())
         Spacer(Modifier.height(10.dp))
         Text(
             text = when {
@@ -179,92 +190,97 @@ private fun FeelsLikeCard(feelsLike: Int, actual: Int, dayMin: Int, dayMax: Int,
 }
 @Composable
 private fun TemperatureDifferenceBar(actual: Int, feelsLike: Int, diff: Int, modifier: Modifier) {
+    // 1. Xác định trạng thái
+    val isHotter = diff > 0
+
+    // Màu sắc
+    val Track = Color.White.copy(alpha = 0.2f)
+    val Fill = if (isHotter) Color(0xFFFF8A65) else Color(0xFF64B5F6)
+
+    // 2. Sắp xếp số bé bên trái, số lớn bên phải
+    val leftTemp = kotlin.math.min(actual, feelsLike)
+    val rightTemp = kotlin.math.max(actual, feelsLike)
+
     Column(modifier = modifier) {
+
         if (diff != 0) {
             Box(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                contentAlignment = if (diff > 0) Alignment.CenterStart else Alignment.CenterEnd
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 4.dp),
+                contentAlignment = if (isHotter) Alignment.CenterStart else Alignment.CenterEnd
             ) {
-                Box(
-                    modifier = Modifier.fillMaxWidth((abs(diff) / 15f).coerceIn(0f, 1f) * 0.9f),
-                    contentAlignment = if (diff > 0) Alignment.CenterStart else Alignment.CenterEnd
-                ) {
-                    Text(
-                        text = "${if (diff > 0) "+" else ""}${diff}°",
-                        color = Color(0xFF64B5F6),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                Text(
+                    text = "${if (diff > 0) "+" else ""}${diff}°",
+                    color = Fill,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.wrapContentWidth(unbounded = true)
+                )
             }
         }
 
         Row(modifier = Modifier.height(24.dp), verticalAlignment = Alignment.CenterVertically) {
+
             Text(
-                text = "$feelsLike°",
+                text = "$leftTemp°",
                 color = Color.White.copy(0.9f),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.width(32.dp)
             )
+
             Spacer(Modifier.width(8.dp))
 
-            Box(modifier = Modifier.weight(1f).height(8.dp), contentAlignment = Alignment.CenterStart) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(6.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Box(
-                    Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(99.dp))
+                    Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(99.dp))
                         .background(Track)
                 )
 
-                val prog = (abs(diff) / 15f).coerceIn(0f, 1f)
                 Row(
-                    modifier = Modifier.fillMaxWidth(prog),
-                    horizontalArrangement = if (diff > 0) Arrangement.Start else Arrangement.End
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        Modifier.fillMaxHeight().weight(1f).clip(RoundedCornerShape(99.dp))
-                            .background(Fill)
-                    )
-                    Canvas(modifier = Modifier.size(8.dp)) {
-                        val sz = size.width
-                        val cy = size.height / 2f
-                        if (diff > 0) {
-                            drawLine(
-                                Color.White,
-                                Offset(sz, 0f),
-                                Offset(0f, cy),
-                                2.dp.toPx(),
-                                StrokeCap.Round
-                            )
-                            drawLine(
-                                Color.White,
-                                Offset(sz, sz),
-                                Offset(0f, cy),
-                                2.dp.toPx(),
-                                StrokeCap.Round
-                            )
-                        } else {
-                            drawLine(
-                                Color.White,
-                                Offset(0f, 0f),
-                                Offset(sz, cy),
-                                2.dp.toPx(),
-                                StrokeCap.Round
-                            )
-                            drawLine(
-                                Color.White,
-                                Offset(0f, sz),
-                                Offset(sz, cy),
-                                2.dp.toPx(),
-                                StrokeCap.Round
-                            )
-                        }
+                    if (isHotter) {
+                        // TRƯỜNG HỢP NÓNG (
+                        Box(
+                            Modifier
+                                .fillMaxHeight()
+                                .weight(1f)
+                                .clip(RoundedCornerShape(topStart = 99.dp, bottomStart = 99.dp))
+                                .background(Fill)
+                        )
+                        ArrowCanvas(color = Color.White, pointingRight = true)
+                    } else {
+                        // TRƯỜNG HỢP LẠNH
+                        ArrowCanvas(color = Color.White, pointingRight = false)
+                        Box(
+                            Modifier
+                                .fillMaxHeight()
+                                .weight(1f)
+                                .clip(RoundedCornerShape(topEnd = 99.dp, bottomEnd = 99.dp))
+                                .background(Fill)
+                        )
                     }
                 }
             }
 
             Spacer(Modifier.width(8.dp))
+
+            // 3. Số bên PHẢI (Luôn là số lớn hơn)
             Text(
-                text = "$actual°",
+                text = "$rightTemp°",
                 color = Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
@@ -273,6 +289,24 @@ private fun TemperatureDifferenceBar(actual: Int, feelsLike: Int, diff: Int, mod
         }
     }
 }
+
+@Composable
+fun ArrowCanvas(color: Color, pointingRight: Boolean) {
+    androidx.compose.foundation.Canvas(modifier = Modifier.size(height = 6.dp, width = 6.dp)) {
+        val w = size.width
+        val h = size.height
+        val stroke = 1.5.dp.toPx()
+
+        if (pointingRight) {
+            drawLine(color, start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(w, h/2), strokeWidth = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawLine(color, start = androidx.compose.ui.geometry.Offset(0f, h), end = androidx.compose.ui.geometry.Offset(w, h/2), strokeWidth = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        } else {
+            drawLine(color, start = androidx.compose.ui.geometry.Offset(w, 0f), end = androidx.compose.ui.geometry.Offset(0f, h/2), strokeWidth = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawLine(color, start = androidx.compose.ui.geometry.Offset(w, h), end = androidx.compose.ui.geometry.Offset(0f, h/2), strokeWidth = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        }
+    }
+}
+
 @Composable
 private fun UvIndexCard(uvMax: Float?, sunset: String?, modifier: Modifier) {
     FrostedCard(modifier) {

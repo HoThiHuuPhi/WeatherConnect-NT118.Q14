@@ -2,7 +2,6 @@ package com.example.doanck.ui.main
 
 import android.location.Geocoder
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -156,9 +155,9 @@ fun SearchScreen(onBack: () -> Unit) {
                         .background(
                             brush = Brush.horizontalGradient(
                                 colors = listOf(
-                                    Color(0xFFB0E0E6), // Sky Blue
-                                    Color(0xFF87CEEB), // Light Sky Blue
-                                    Color(0xFFFFFACD)  // Lemon Chiffon
+                                    Color(0xFFB0E0E6),
+                                    Color(0xFF87CEEB),
+                                    Color(0xFFFFFACD)
                                 )
                             ),
                             shape = RoundedCornerShape(20.dp)
@@ -256,7 +255,6 @@ fun SearchScreen(onBack: () -> Unit) {
                 }
             }
 
-            // CONTENT AREA
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     selectedLocation != null -> {
@@ -292,8 +290,8 @@ fun SearchScreen(onBack: () -> Unit) {
                                         .background(
                                             brush = Brush.horizontalGradient(
                                                 colors = listOf(
-                                                    Color.White.copy(0.25f),
-                                                    Color.White.copy(0.15f)
+                                                    Color.Black.copy(0.25f),
+                                                    Color.Black.copy(0.15f)
                                                 )
                                             )
                                         )

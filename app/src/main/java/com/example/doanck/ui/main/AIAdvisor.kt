@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.doanck.data.model.CurrentWeather
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -29,7 +30,6 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-// ✅ Mỗi lời khuyên có icon riêng
 data class AIWeatherTip(
     val emoji: String,
     val advice: String,
@@ -205,7 +205,6 @@ Chỉ trả về JSON (không markdown, không backticks), dạng:
         if ((humidity ?: 0.0) >= 80) tips += AIWeatherTip("💧", "Độ ẩm cao, mặc đồ thoáng, mau khô", "Giảm bí bách")
         if ((humidity ?: 100.0) <= 45) tips += AIWeatherTip("🫗", "Độ ẩm thấp, uống đủ nước", "Tránh khô da")
 
-        // Bổ sung cho đủ “nhiều thông tin”
         tips += AIWeatherTip("🚶", "Nếu ra đường, xem trời trước khi đi xa", "Chủ động lịch trình")
         tips += AIWeatherTip("📌", "Theo dõi cảnh báo thời tiết trong ngày", "Tránh thay đổi đột ngột")
 
@@ -214,7 +213,7 @@ Chỉ trả về JSON (không markdown, không backticks), dạng:
 }
 
 @Composable
-fun AIClothingAdvisorDialog(
+fun AIAdvisorDialog(
     currentWeather: CurrentWeather,
     tempC: Int,
     weatherDesc: String,
@@ -257,11 +256,11 @@ fun AIClothingAdvisorDialog(
 
     LaunchedEffect(Unit) { reload() }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
             modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = screenHeight * 0.85f)
+                .fillMaxWidth(0.8f)
+                .heightIn(max = screenHeight * 0.6f)
                 .wrapContentHeight(),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -353,10 +352,12 @@ fun AIClothingAdvisorDialog(
                                     .verticalScroll(rememberScrollState())
                                     .padding(16.dp)
                             ) {
-                                // Weather Info Card
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAFC)),
+                                    colors = CardDefaults.cardColors(containerColor = Color(
+                                        0xFFFFF2B6
+                                    )
+                                    ),
                                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
@@ -384,7 +385,6 @@ fun AIClothingAdvisorDialog(
 
                                 Spacer(Modifier.height(16.dp))
 
-                                // ✅ List lời khuyên (mỗi dòng có icon)
                                 tips!!.forEach { tip ->
                                     AITipItem(tip)
                                     Spacer(Modifier.height(12.dp))
@@ -399,18 +399,6 @@ fun AIClothingAdvisorDialog(
                                 )
 
                                 Spacer(Modifier.height(8.dp))
-
-                                Button(
-                                    onClick = onDismiss,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFFEDF2F7),
-                                        contentColor = Color(0xFF2D3748)
-                                    ),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("Đóng", fontWeight = FontWeight.Bold)
-                                }
                             }
                         }
                     }
@@ -426,7 +414,6 @@ private fun AITipItem(tip: AIWeatherTip) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFAFBFC)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),

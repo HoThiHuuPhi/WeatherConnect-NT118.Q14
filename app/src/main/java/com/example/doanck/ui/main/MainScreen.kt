@@ -200,9 +200,8 @@ fun MainScreen(
             )
         }
 
-        // DIALOG TƯ VẤN QUẦN ÁO (AI VERSION)
         if (showClothingDialog && currentWeatherData != null && dailyWeatherData != null) {
-            AIClothingAdvisorDialog(
+            AIAdvisorDialog(
                 currentWeather = currentWeatherData!!,
                 tempC = currentTempC,
                 weatherDesc = WeatherUtils.getDescriptionByCode(currentWeatherData!!.weatherCode),

@@ -1,22 +1,24 @@
 package com.example.doanck.ui.main
 
+import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
-import android.util.Log
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Directions
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,121 +26,172 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.osmdroid.bonuspack.routing.OSRMRoadManager
-import org.osmdroid.bonuspack.routing.Road
-import org.osmdroid.bonuspack.routing.RoadManager
-import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
-import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
-import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
-
-private const val TAG = "SOSMapScreen"
-private const val SAME_LOCATION_THRESHOLD_M = 30.0
-
-private fun distanceMeters(a: GeoPoint, b: GeoPoint): Double {
-    val res = FloatArray(1)
-    Location.distanceBetween(a.latitude, a.longitude, b.latitude, b.longitude, res)
-    return res[0].toDouble()
-}
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.google.android.gms.location.LocationServices
+import vn.vietmap.vietmapsdk.Vietmap
+import vn.vietmap.vietmapsdk.annotations.MarkerOptions
+import vn.vietmap.vietmapsdk.camera.CameraPosition
+import vn.vietmap.vietmapsdk.camera.CameraUpdateFactory
+import vn.vietmap.vietmapsdk.geometry.LatLng
+import vn.vietmap.vietmapsdk.location.LocationComponentActivationOptions
+import vn.vietmap.vietmapsdk.location.engine.LocationEngineDefault
+import vn.vietmap.vietmapsdk.location.modes.CameraMode
+import vn.vietmap.vietmapsdk.location.modes.RenderMode
+import vn.vietmap.vietmapsdk.maps.MapView
+import vn.vietmap.vietmapsdk.maps.Style
+import vn.vietmap.vietmapsdk.maps.VietMapGL
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SOSMapScreen(
+fun RescueMapScreen(
     lat: Double,
     lon: Double,
     name: String,
     onBack: () -> Unit,
-    onOpenRescueMap: () -> Unit,
+    onOpenOverview: () -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    var mapController by remember { mutableStateOf<org.osmdroid.api.IMapController?>(null) }
+    val apiKey = "1b2a23b390ba308ebdc68c0e33e0090d339f9fcd3a4cfb42"
+    val styleUrl = "https://maps.vietmap.vn/api/maps/light/styles.json?apikey=$apiKey"
+
+    remember { Vietmap.getInstance(context) }
+
+    val fusedClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
     var mapView by remember { mutableStateOf<MapView?>(null) }
-    var myLocationOverlay by remember { mutableStateOf<MyLocationNewOverlay?>(null) }
+    var vietMapGL by remember { mutableStateOf<VietMapGL?>(null) }
+    var myLocation by remember { mutableStateOf<Location?>(null) }
 
-    var currentRoadOverlay by remember { mutableStateOf<Polyline?>(null) }
-    var isRouting by remember { mutableStateOf(false) }
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+                    PackageManager.PERMISSION_GRANTED
+        )
+    }
 
-    var showInfoSheet by remember { mutableStateOf(false) }
-    var infoTitle by remember { mutableStateOf(name) }
-    var infoSnippet by remember { mutableStateOf("Cần hỗ trợ tại đây!") }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { granted -> hasLocationPermission = granted }
+    )
 
     LaunchedEffect(Unit) {
-        Configuration.getInstance().userAgentValue = context.packageName
+        if (!hasLocationPermission) permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+
+    // Lấy lastLocation để nút "Vị trí của tôi" đỡ bị null
+    LaunchedEffect(hasLocationPermission) {
+        if (hasLocationPermission) {
+            fusedClient.lastLocation.addOnSuccessListener { loc ->
+                if (loc != null) myLocation = loc
+            }
+        }
+    }
+
+    // Lifecycle MapView
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> mapView?.onStart()
+                Lifecycle.Event.ON_RESUME -> mapView?.onResume()
+                Lifecycle.Event.ON_PAUSE -> mapView?.onPause()
+                Lifecycle.Event.ON_STOP -> mapView?.onStop()
+                Lifecycle.Event.ON_DESTROY -> mapView?.onDestroy()
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    fun moveToMyLocation() {
+        val loc = myLocation ?: vietMapGL?.locationComponent?.lastKnownLocation
+        if (loc == null) {
+            Toast.makeText(context, "Đang lấy vị trí của bạn...", Toast.LENGTH_SHORT).show()
+            return
+        }
+        vietMapGL?.animateCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder()
+                    .target(LatLng(loc.latitude, loc.longitude))
+                    .zoom(16.0)
+                    .build()
+            )
+        )
+    }
+
+    fun moveToSOS() {
+        vietMapGL?.animateCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder()
+                    .target(LatLng(lat, lon))
+                    .zoom(17.0)
+                    .build()
+            )
+        )
     }
 
     Scaffold(containerColor = Color.White) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.fillMaxSize()) {
 
-            // ===== MAP =====
+            // MAP
             AndroidView(
                 factory = { ctx ->
                     MapView(ctx).apply {
-                        setTileSource(TileSourceFactory.MAPNIK)
-                        setMultiTouchControls(true)
-                        zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+                        onCreate(null)
+                        getMapAsync { map ->
+                            vietMapGL = map
+                            map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
+                                if (hasLocationPermission) {
+                                    try {
+                                        val lc = map.locationComponent
+                                        lc.activateLocationComponent(
+                                            LocationComponentActivationOptions.builder(ctx, style).build()
+                                        )
+                                        lc.isLocationComponentEnabled = true
+                                        lc.cameraMode = CameraMode.NONE
+                                        lc.renderMode = RenderMode.GPS
+                                        lc.locationEngine = LocationEngineDefault.getDefaultLocationEngine(ctx)
+                                        lc.lastKnownLocation?.let { myLocation = it }
+                                    } catch (_: Exception) {}
+                                }
 
-                        val controller = this.controller
-                        controller.setZoom(18.0)
-                        val targetPoint = GeoPoint(lat, lon)
-                        controller.setCenter(targetPoint)
+                                // SOS Marker
+                                map.addMarker(
+                                    MarkerOptions()
+                                        .position(LatLng(lat, lon))
+                                        .title(name)
+                                        .snippet("Cần hỗ trợ khẩn cấp!")
+                                )
 
-                        mapController = controller
-                        mapView = this
-
-                        val locationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(ctx), this)
-                        locationOverlay.enableMyLocation()
-                        overlays.add(locationOverlay)
-                        myLocationOverlay = locationOverlay
-
-                        val marker = Marker(this).apply {
-                            position = targetPoint
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            title = name
-                            snippet = "Cần hỗ trợ tại đây!"
-                            setOnMarkerClickListener { m, _ ->
-                                infoTitle = m.title ?: name
-                                infoSnippet = m.snippet ?: ""
-                                showInfoSheet = true
-                                true
+                                moveToSOS()
                             }
                         }
-                        overlays.add(marker)
+                        mapView = this
                     }
                 },
                 modifier = Modifier.fillMaxSize()
             )
 
-            // ===== HEADER =====
+            // HEADER
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
-                    .padding(top = 0.dp, start = 16.dp, end = 16.dp)
+                    .padding(horizontal = 16.dp)
                     .fillMaxWidth()
                     .shadow(12.dp, RoundedCornerShape(20.dp))
                     .background(
                         brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(0xFFB0E0E6),
-                                Color(0xFF87CEEB),
-                                Color(0xFFFFFACD)
-                            )
+                            colors = listOf(Color(0xFFB0E0E6), Color(0xFF87CEEB), Color(0xFFFFFACD))
                         ),
                         shape = RoundedCornerShape(20.dp)
                     )
@@ -154,11 +207,7 @@ fun SOSMapScreen(
                         shadowElevation = 4.dp
                     ) {
                         IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = Color(0xFF1976D2)
-                            )
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color(0xFF1976D2))
                         }
                     }
 
@@ -173,401 +222,76 @@ fun SOSMapScreen(
                             maxLines = 1
                         )
                         Text(
-                            text = String.format("%.6f, %.6f", lat, lon),
+                            text = String.format("%.5f, %.5f", lat, lon),
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF424242),
                             maxLines = 1
                         )
                     }
 
-                    if (isRouting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = Color(0xFF1976D2),
-                            strokeWidth = 3.dp
-                        )
-                    } else {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.White.copy(alpha = 0.9f),
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Default.LocationSearching,
-                                    contentDescription = null,
-                                    tint = Color(0xFFEF5350),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.width(8.dp))
-                }
-            }
-
-            // ===== ZOOM BUTTONS =====
-            Column(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .shadow(6.dp, CircleShape)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color(0xFFE3F2FD), Color(0xFFBBDEFB))
-                            ),
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    IconButton(onClick = { mapView?.controller?.zoomIn() }) {
-                        Icon(
-                            Icons.Default.Add,
-                            "Phóng to",
-                            modifier = Modifier.size(24.dp),
-                            tint = Color(0xFF1565C0)
-                        )
-                    }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .shadow(6.dp, CircleShape)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color(0xFFE3F2FD), Color(0xFFBBDEFB))
-                            ),
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    IconButton(onClick = { mapView?.controller?.zoomOut() }) {
-                        Icon(
-                            Icons.Default.Remove,
-                            "Thu nhỏ",
-                            modifier = Modifier.size(24.dp),
-                            tint = Color(0xFF1565C0)
-                        )
+                    IconButton(onClick = onOpenOverview) {
+                        Icon(Icons.Default.Map, null, tint = Color(0xFF1976D2))
                     }
                 }
             }
 
-            // ===== ACTION BUTTONS (BOTTOM END) =====
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 24.dp),
+                    .navigationBarsPadding()
+                    .padding(end = 16.dp, bottom = 24.dp)
+                    .width(IntrinsicSize.Max),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.End
             ) {
-                // ---- Google Maps Navigation ----
-                ActionButtonWithLabel(
-                    label = "Dẫn đường",
-                    icon = Icons.Default.Navigation,
-                    containerColor = Color(0xFF34A853),
-                    contentColor = Color.White,
-                    onClick = {
-                        val target = GeoPoint(lat, lon)
-                        val myLoc = myLocationOverlay?.myLocation
-
-                        // ✅ nếu đang ở ngay điểm SOS -> không mở Google Maps
-                        if (myLoc != null) {
-                            val d = distanceMeters(myLoc, target)
-                            if (d <= SAME_LOCATION_THRESHOLD_M) {
-                                Toast.makeText(
-                                    context,
-                                    "Bạn đang ở ngay điểm SOS (~${d.toInt()}m)",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                mapController?.animateTo(target)
-                                mapController?.setZoom(18.5)
-                                mapView?.invalidate()
-                                return@ActionButtonWithLabel
-                            }
-                        }
-
-                        val gmmIntentUri = Uri.parse("google.navigation:q=$lat,$lon&mode=d")
-                        val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri).apply {
-                            setPackage("com.google.android.apps.maps")
-                        }
-
-                        if (mapIntent.resolveActivity(context.packageManager) != null) {
-                            context.startActivity(mapIntent)
-                        } else {
-                            val browserUri = Uri.parse(
-                                "https://www.google.com/maps/dir/?api=1&destination=$lat,$lon&travelmode=driving"
-                            )
-                            context.startActivity(Intent(Intent.ACTION_VIEW, browserUri))
-                        }
-                    }
-                )
-
-                // ---- View route inside OSMDroid ----
-                ActionButtonWithLabel(
-                    label = "Xem đường",
-                    icon = Icons.Default.Directions,
-                    containerColor = Color(0xFF2196F3),
-                    contentColor = Color.White,
-                    onClick = {
-                        val myLoc = myLocationOverlay?.myLocation
-                        if (myLoc == null) {
-                            Toast.makeText(context, "Đang lấy vị trí...", Toast.LENGTH_SHORT).show()
-                            return@ActionButtonWithLabel
-                        }
-
-                        val target = GeoPoint(lat, lon)
-                        val d = distanceMeters(myLoc, target)
-
-                        // ✅ TRÙNG / RẤT GẦN: không routing, xoá route cũ, focus target
-                        if (d <= SAME_LOCATION_THRESHOLD_M) {
-                            Toast.makeText(
-                                context,
-                                "Bạn đang ở ngay điểm SOS (~${d.toInt()}m)",
-                                Toast.LENGTH_SHORT
-                            ).show()
-
-                            currentRoadOverlay?.let { mapView?.overlays?.remove(it) }
-                            currentRoadOverlay = null
-
-                            mapController?.animateTo(target)
-                            mapController?.setZoom(18.5)
-                            mapView?.invalidate()
-                            return@ActionButtonWithLabel
-                        }
-
-                        isRouting = true
-                        scope.launch(Dispatchers.IO) {
-                            try {
-                                val roadManager = OSRMRoadManager(context, context.packageName)
-                                roadManager.setMean(OSRMRoadManager.MEAN_BY_CAR)
-
-                                val waypoints = arrayListOf(myLoc, target)
-                                val road = roadManager.getRoad(waypoints)
-
-                                if (road.mStatus != Road.STATUS_OK) {
-                                    withContext(Dispatchers.Main) {
-                                        Toast.makeText(context, "Không tìm thấy đường!", Toast.LENGTH_SHORT).show()
-                                    }
-                                } else {
-                                    val roadOverlay = RoadManager.buildRoadOverlay(road).apply {
-                                        outlinePaint.color = android.graphics.Color.parseColor("#2196F3")
-                                        outlinePaint.strokeWidth = 18f
-                                    }
-
-                                    withContext(Dispatchers.Main) {
-                                        val dist = road.mLength
-
-                                        Toast.makeText(
-                                            context,
-                                            "📍 ${String.format("%.1f", dist)} km",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-
-                                        currentRoadOverlay?.let { mapView?.overlays?.remove(it) }
-                                        mapView?.overlays?.add(0, roadOverlay)
-                                        currentRoadOverlay = roadOverlay
-                                        mapView?.invalidate()
-
-                                        val bb = road.mBoundingBox
-                                        val degenerate =
-                                            (bb?.latNorth == bb?.latSouth) && (bb?.lonEast == bb?.lonWest)
-
-                                        if (bb != null && !degenerate) {
-                                            mapView?.zoomToBoundingBox(bb, true, 80)
-                                        } else {
-                                            mapController?.animateTo(target)
-                                            mapController?.setZoom(18.0)
-                                        }
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error", e)
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(context, "Lỗi: ${e.message}", Toast.LENGTH_SHORT).show()
-                                }
-                            } finally {
-                                withContext(Dispatchers.Main) { isRouting = false }
-                            }
-                        }
-                    }
-                )
-
-                // ---- Focus SOS point ----
-                ActionButtonWithLabel(
-                    label = "Điểm SOS",
-                    icon = Icons.Default.Place,
-                    containerColor = Color(0xFFEF5350),
-                    contentColor = Color.White,
-                    onClick = {
-                        mapController?.animateTo(GeoPoint(lat, lon))
-                        mapController?.setZoom(18.0)
-                    }
-                )
-
-                // ---- My location ----
-                ActionButtonWithLabel(
-                    label = "Vị trí của tôi",
-                    icon = Icons.Default.MyLocation,
+                ExtendedFloatingActionButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { openGoogleMapsNavigation(context, lat, lon) },
                     containerColor = Color(0xFF1976D2),
                     contentColor = Color.White,
-                    onClick = {
-                        val myLoc = myLocationOverlay?.myLocation
-                        if (myLoc != null) {
-                            mapController?.animateTo(myLoc)
-                            mapController?.setZoom(18.5)
-                        } else {
-                            Toast.makeText(context, "Chưa lấy được vị trí", Toast.LENGTH_SHORT).show()
-                        }
-                    }
+                    icon = { Icon(Icons.Default.Directions, contentDescription = null) },
+                    text = { Text("Dẫn đường") },
+                    expanded = true
                 )
-            }
 
-            // ===== BOTTOM SHEET INFO =====
-            if (showInfoSheet) {
-                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                ExtendedFloatingActionButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { moveToMyLocation() },
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF1976D2),
+                    icon = { Icon(Icons.Default.MyLocation, contentDescription = null) },
+                    text = { Text("Vị trí của tôi") },
+                    expanded = true
+                )
 
-                ModalBottomSheet(
-                    onDismissRequest = { showInfoSheet = false },
-                    sheetState = sheetState,
-                    containerColor = Color.White
-                ) {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
-                    ) {
-                        Text(
-                            text = infoTitle,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1565C0)
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = String.format("%.6f, %.6f", lat, lon),
-                            fontSize = 13.sp,
-                            color = Color(0xFF424242)
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(infoSnippet, color = Color(0xFF424242))
-
-                        Spacer(Modifier.height(16.dp))
-
-                        Button(
-                            onClick = {
-                                showInfoSheet = false
-                                onOpenRescueMap()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
-                        ) {
-                            Text("Xem bản đồ cứu trợ", color = Color.White, fontWeight = FontWeight.Bold)
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-
-                        OutlinedButton(
-                            onClick = {
-                                val target = GeoPoint(lat, lon)
-                                val myLoc = myLocationOverlay?.myLocation
-
-                                if (myLoc != null) {
-                                    val d = distanceMeters(myLoc, target)
-                                    if (d <= SAME_LOCATION_THRESHOLD_M) {
-                                        Toast.makeText(
-                                            context,
-                                            "Bạn đang ở ngay điểm SOS (~${d.toInt()}m)",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        mapController?.animateTo(target)
-                                        mapController?.setZoom(18.5)
-                                        mapView?.invalidate()
-                                        return@OutlinedButton
-                                    }
-                                }
-
-                                val gmmIntentUri = Uri.parse("google.navigation:q=$lat,$lon&mode=d")
-                                val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri).apply {
-                                    setPackage("com.google.android.apps.maps")
-                                }
-                                if (mapIntent.resolveActivity(context.packageManager) != null) {
-                                    context.startActivity(mapIntent)
-                                } else {
-                                    val browserUri = Uri.parse(
-                                        "https://www.google.com/maps/dir/?api=1&destination=$lat,$lon&travelmode=driving"
-                                    )
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, browserUri))
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Dẫn đường")
-                        }
-
-                        Spacer(Modifier.height(8.dp))
-                    }
-                }
+                ExtendedFloatingActionButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { moveToSOS() },
+                    containerColor = Color.White,
+                    contentColor = Color(0xFFD32F2F),
+                    icon = { Icon(Icons.Default.LocationOn, contentDescription = null) },
+                    text = { Text("Vị trí SOS") },
+                    expanded = true
+                )
             }
         }
     }
 }
 
-@Composable
-fun ActionButtonWithLabel(
-    label: String,
-    icon: ImageVector,
-    containerColor: Color,
-    contentColor: Color,
-    onClick: () -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        AnimatedVisibility(
-            visible = true,
-            enter = fadeIn() + slideInHorizontally(initialOffsetX = { it / 2 }),
-            exit = fadeOut() + slideOutHorizontally(targetOffsetX = { it / 2 })
-        ) {
-            Surface(
-                color = Color(0xFF212121).copy(alpha = 0.85f),
-                shape = RoundedCornerShape(12.dp),
-                shadowElevation = 4.dp
-            ) {
-                Text(
-                    text = label,
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                )
-            }
-        }
+private fun openGoogleMapsNavigation(context: Context, lat: Double, lon: Double) {
+    val gmmIntentUri = Uri.parse("google.navigation:q=$lat,$lon&mode=d")
+    val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri).apply {
+        setPackage("com.google.android.apps.maps")
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
 
-        FloatingActionButton(
-            onClick = onClick,
-            modifier = Modifier.size(56.dp),
-            containerColor = containerColor,
-            contentColor = contentColor,
-            shape = CircleShape,
-            elevation = FloatingActionButtonDefaults.elevation(
-                defaultElevation = 8.dp,
-                pressedElevation = 12.dp,
-                hoveredElevation = 10.dp
-            )
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                modifier = Modifier.size(28.dp)
-            )
+    if (mapIntent.resolveActivity(context.packageManager) != null) {
+        context.startActivity(mapIntent)
+    } else {
+        // fallback nếu máy không có Google Maps
+        val fallback = Intent(Intent.ACTION_VIEW, Uri.parse("geo:$lat,$lon?q=$lat,$lon")).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
+        context.startActivity(fallback)
     }
 }
