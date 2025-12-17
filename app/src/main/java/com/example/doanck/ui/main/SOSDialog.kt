@@ -56,6 +56,10 @@ fun SOSDialog(
     var phone by remember { mutableStateOf("") }
     var isSending by remember { mutableStateOf(false) }
 
+    // --- CÁC BIẾN LƯU LỖI (VALIDATION) ---
+    var phoneError by remember { mutableStateOf<String?>(null) }
+    var messageError by remember { mutableStateOf<String?>(null) }
+
     var isReportForOthers by remember { mutableStateOf(false) }
 
     var selectedLat by remember { mutableDoubleStateOf(lat) }
@@ -65,6 +69,32 @@ fun SOSDialog(
 
     // THÊM STATE ĐỂ HIỂN THỊ DIALOG THÀNH CÔNG
     var showSuccessDialog by remember { mutableStateOf(false) }
+
+    // Hàm kiểm tra hợp lệ
+    fun validateInputs(): Boolean {
+        var isValid = true
+
+        // 1. Kiểm tra SĐT: Phải 10 số, bắt đầu bằng 0, chỉ chứa số
+        if (phone.isBlank()) {
+            phoneError = "Vui lòng nhập số điện thoại"
+            isValid = false
+        } else if (!phone.matches(Regex("^0\\d{9}$"))) {
+            phoneError = "SĐT không hợp lệ (Phải có 10 số, bắt đầu bằng 0)"
+            isValid = false
+        } else {
+            phoneError = null
+        }
+
+        // 2. Kiểm tra Tin nhắn: Không được để trống
+        if (message.isBlank()) {
+            messageError = "Vui lòng nhập tình trạng khẩn cấp"
+            isValid = false
+        } else {
+            messageError = null
+        }
+
+        return isValid
+    }
 
     LaunchedEffect(isReportForOthers) {
         if (!isReportForOthers) {
@@ -154,16 +184,47 @@ fun SOSDialog(
                         }
                     }
 
+                    // --- TRƯỜNG NHẬP SỐ ĐIỆN THOẠI (CÓ RÀNG BUỘC) ---
                     OutlinedTextField(
-                        value = phone, onValueChange = { if (it.length <= 11) phone = it },
-                        label = { Text("SĐT Liên hệ") }, leadingIcon = { Icon(Icons.Default.Call, null) },
-                        modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
+                        value = phone,
+                        onValueChange = {
+                            // Chỉ cho phép nhập số và tối đa 10 ký tự
+                            if (it.length <= 10 && it.all { char -> char.isDigit() }) {
+                                phone = it
+                                if (phoneError != null) phoneError = null // Xóa lỗi khi người dùng gõ lại
+                            }
+                        },
+                        label = { Text("SĐT Liên hệ") },
+                        leadingIcon = { Icon(Icons.Default.Call, null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        isError = phoneError != null,
+                        supportingText = {
+                            if (phoneError != null) {
+                                Text(text = phoneError!!, color = MaterialTheme.colorScheme.error)
+                            }
+                        },
+                        singleLine = true
                     )
+
                     Spacer(Modifier.height(8.dp))
+
+                    // --- TRƯỜNG NHẬP TIN NHẮN (CÓ RÀNG BUỘC) ---
                     OutlinedTextField(
-                        value = message, onValueChange = { message = it },
-                        label = { Text("Tình trạng") }, leadingIcon = { Icon(Icons.Default.Description, null) },
-                        modifier = Modifier.fillMaxWidth()
+                        value = message,
+                        onValueChange = {
+                            message = it
+                            if (messageError != null) messageError = null
+                        },
+                        label = { Text("Tình trạng") },
+                        leadingIcon = { Icon(Icons.Default.Description, null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = messageError != null,
+                        supportingText = {
+                            if (messageError != null) {
+                                Text(text = messageError!!, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
                     )
 
                     Spacer(Modifier.height(24.dp))
@@ -171,11 +232,17 @@ fun SOSDialog(
                         OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Hủy") }
                         Button(
                             onClick = {
-                                val user = FirebaseAuth.getInstance().currentUser
-                                if (user == null || phone.isBlank() || message.isBlank()) {
-                                    Toast.makeText(context, "Vui lòng nhập đủ thông tin!", Toast.LENGTH_SHORT).show()
+                                // 1. Gọi hàm kiểm tra Validation trước
+                                if (!validateInputs()) {
                                     return@Button
                                 }
+
+                                val user = FirebaseAuth.getInstance().currentUser
+                                if (user == null) {
+                                    Toast.makeText(context, "Vui lòng đăng nhập lại!", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+
                                 isSending = true
                                 scope.launch {
                                     var finalLat = lat
