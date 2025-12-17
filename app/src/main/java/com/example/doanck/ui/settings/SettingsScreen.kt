@@ -184,7 +184,7 @@ fun SettingsScreen(
 
             // --- CÁC NHÓM CÀI ĐẶT ---
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                SettingsGroup("HỒ SƠ CÁ NHÂN (ĐỒNG BỘ CLOUD)") {
+                SettingsGroup("HỒ SƠ CÁ NHÂN") {
                     ProSettingActionItem(Icons.Outlined.CalendarToday, Color(0xFFF43F5E), "Ngày sinh", dateOfBirth) { showDatePicker = true }
                     Divider(Modifier.padding(horizontal = 16.dp), color = Color.Gray.copy(0.05f))
                     ProSettingActionItem(Icons.Outlined.Phone, Color(0xFF0EA5E9), "Số điện thoại", phoneNumber) {
@@ -197,7 +197,7 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                SettingsGroup("ỨNG DỤNG (LOCAL)") {
+                SettingsGroup("ỨNG DỤNG") {
                     ProSettingSwitchItem(Icons.Outlined.AutoAwesome, Color(0xFFF59E0B), "Hiệu ứng thời tiết", enableAnimation) {
                         scope.launch { appDataStore.setEnableAnimation(it) }
                     }
