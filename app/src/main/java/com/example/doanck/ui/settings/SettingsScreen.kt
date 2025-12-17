@@ -1,15 +1,16 @@
 package com.example.doanck.ui.main
 
-import android.app.DatePickerDialog
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -40,8 +41,17 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.storage.ktx.storage
 import kotlinx.coroutines.launch
-import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.*
 
+// Định nghĩa màu sắc
+val ModernBlue = Color(0xFF3B82F6)
+val ModernBg = Color(0xFFF8FAFC)
+val CardBg = Color.White.copy(alpha = 0.95f)
+val TextPrimary = Color(0xFF1E293B)
+val TextSecondary = Color(0xFF64748B)
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     appDataStore: AppDataStore,
@@ -55,11 +65,11 @@ fun SettingsScreen(
     val storage = Firebase.storage
     val currentUser = auth.currentUser
 
-    // --- STATES DỮ LIỆU TỪ CLOUD ---
+    // --- QUẢN LÝ DỮ LIỆU CLOUD ---
     var userProfile by remember { mutableStateOf<Map<String, Any>>(emptyMap()) }
     var isAvatarUploading by remember { mutableStateOf(false) }
 
-    // Lắng nghe dữ liệu Realtime từ Firestore
+    // Lắng nghe dữ liệu từ Firestore (Realtime)
     LaunchedEffect(currentUser?.uid) {
         if (currentUser != null) {
             db.collection("users").document(currentUser.uid)
@@ -71,35 +81,38 @@ fun SettingsScreen(
         }
     }
 
-    // Giá trị hiển thị từ Cloud
+    // Lấy thông tin từ Profile hoặc dùng mặc định
     val dateOfBirth = userProfile["dob"]?.toString() ?: "01/01/2000"
     val phoneNumber = userProfile["phone"]?.toString() ?: "Chưa cập nhật"
     val gender = userProfile["gender"]?.toString() ?: "Nam"
     val avatarUrl = userProfile["avatarUrl"]?.toString()
 
-    // Cài đặt Local từ DataStore
+    // Cài đặt thiết bị (Local)
     val enableAnimation by appDataStore.enableAnimation.collectAsState(initial = true)
     val tempUnit by appDataStore.tempUnit.collectAsState(initial = "C")
 
     // --- UI STATES ---
-    var showChangePassDialog by remember { mutableStateOf(false) }
     var showPhoneDialog by remember { mutableStateOf(false) }
     var showGenderDialog by remember { mutableStateOf(false) }
+    var showChangePassDialog by remember { mutableStateOf(false) }
     var showAppInfoDialog by remember { mutableStateOf(false) }
+
+    val datePickerState = rememberDatePickerState(initialDisplayMode = DisplayMode.Input)
+    var showDatePicker by remember { mutableStateOf(false) }
 
     var tempPhoneInput by remember { mutableStateOf("") }
     var oldPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
 
-    // --- HÀM CẬP NHẬT FIRESTORE ---
+    // Hàm cập nhật Profile lên Cloud
     fun updateProfile(key: String, value: Any) {
         currentUser?.uid?.let { uid ->
             db.collection("users").document(uid).set(mapOf(key to value), SetOptions.merge())
-                .addOnFailureListener { Toast.makeText(context, "Lỗi đồng bộ!", Toast.LENGTH_SHORT).show() }
+                .addOnFailureListener { Toast.makeText(context, "Lỗi đồng bộ Cloud!", Toast.LENGTH_SHORT).show() }
         }
     }
 
-    // --- LOGIC UPLOAD ẢNH ---
+    // Logic Upload Avatar lên Storage
     val avatarLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let { selectedUri ->
             currentUser?.uid?.let { uid ->
@@ -115,101 +128,150 @@ fun SettingsScreen(
         }
     }
 
-    // --- DATE PICKER ---
-    val calendar = Calendar.getInstance()
-    val datePickerDialog = DatePickerDialog(context, { _, y, m, d ->
-        updateProfile("dob", "$d/${m + 1}/$y")
-    }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH))
-
-    Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFFF0F4F8), Color(0xFFD9E2EC))))) {
+    Scaffold(
+        containerColor = ModernBg,
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Cài đặt", fontWeight = FontWeight.Bold, color = TextPrimary) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary)
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = ModernBg)
+            )
+        }
+    ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(60.dp))
-            Text("Cài đặt", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(24.dp))
 
             // --- AVATAR ---
             Box(contentAlignment = Alignment.BottomEnd) {
-                if (isAvatarUploading) {
-                    CircularProgressIndicator(modifier = Modifier.size(110.dp))
-                } else {
-                    Image(
-                        painter = rememberAsyncImagePainter(avatarUrl ?: android.R.drawable.sym_def_app_icon),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(110.dp).clip(CircleShape).border(4.dp, Color.White, CircleShape)
-                            .clickable { avatarLauncher.launch("image/*") }
-                    )
+                Surface(
+                    modifier = Modifier.size(120.dp).shadow(8.dp, CircleShape),
+                    shape = CircleShape,
+                    border = BorderStroke(4.dp, Color.White),
+                    color = Color.LightGray
+                ) {
+                    if (isAvatarUploading) {
+                        Box(contentAlignment = Alignment.Center) { CircularProgressIndicator(strokeWidth = 2.dp) }
+                    } else {
+                        Image(
+                            painter = rememberAsyncImagePainter(avatarUrl ?: android.R.drawable.sym_def_app_icon),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().clickable { avatarLauncher.launch("image/*") }
+                        )
+                    }
                 }
-                IconButton(onClick = { avatarLauncher.launch("image/*") }, modifier = Modifier.size(32.dp).background(Color(0xFF3B82F6), CircleShape)) {
-                    Icon(Icons.Default.CameraAlt, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Surface(
+                    modifier = Modifier.size(34.dp).offset(x = (-2).dp, y = (-2).dp).clickable { avatarLauncher.launch("image/*") },
+                    shape = CircleShape, color = ModernBlue, border = BorderStroke(2.dp, Color.White)
+                ) {
+                    Icon(Icons.Default.CameraAlt, null, tint = Color.White, modifier = Modifier.padding(8.dp))
                 }
             }
 
+            Text(currentUser?.email ?: "", Modifier.padding(top = 12.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
             Spacer(modifier = Modifier.height(32.dp))
 
+            // --- CÁC NHÓM CÀI ĐẶT ---
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                SettingsGroup("Hồ sơ cá nhân (Cloud)") {
-                    ProSettingActionItem(Icons.Outlined.CalendarToday, Color(0xFFEC4899), "Ngày sinh", dateOfBirth) { datePickerDialog.show() }
+                SettingsGroup("HỒ SƠ CÁ NHÂN (ĐỒNG BỘ CLOUD)") {
+                    ProSettingActionItem(Icons.Outlined.CalendarToday, Color(0xFFF43F5E), "Ngày sinh", dateOfBirth) { showDatePicker = true }
+                    Divider(Modifier.padding(horizontal = 16.dp), color = Color.Gray.copy(0.05f))
                     ProSettingActionItem(Icons.Outlined.Phone, Color(0xFF0EA5E9), "Số điện thoại", phoneNumber) {
                         tempPhoneInput = if(phoneNumber == "Chưa cập nhật") "" else phoneNumber
                         showPhoneDialog = true
                     }
+                    Divider(Modifier.padding(horizontal = 16.dp), color = Color.Gray.copy(0.05f))
                     ProSettingActionItem(Icons.Outlined.Person, Color(0xFF8B5CF6), "Giới tính", gender) { showGenderDialog = true }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                SettingsGroup("Cài đặt ứng dụng") {
-                    ProSettingSwitchItem(Icons.Default.Animation, Color(0xFF8B5CF6), "Hiệu ứng động", enableAnimation) {
+                SettingsGroup("ỨNG DỤNG (LOCAL)") {
+                    ProSettingSwitchItem(Icons.Outlined.AutoAwesome, Color(0xFFF59E0B), "Hiệu ứng thời tiết", enableAnimation) {
                         scope.launch { appDataStore.setEnableAnimation(it) }
                     }
-                    ProSettingActionItem(Icons.Default.Thermostat, Color(0xFFF59E0B), "Đơn vị nhiệt độ", "Độ $tempUnit") {
+                    Divider(Modifier.padding(horizontal = 16.dp), color = Color.Gray.copy(0.05f))
+                    ProSettingActionItem(Icons.Outlined.Thermostat, Color(0xFF10B981), "Đơn vị nhiệt độ", "Độ $tempUnit") {
                         scope.launch { appDataStore.setTempUnit(if (tempUnit == "C") "F" else "C") }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                SettingsGroup("Hệ thống") {
-                    ProSettingActionItem(Icons.Outlined.Lock, Color(0xFF10B981), "Đổi mật khẩu") { showChangePassDialog = true }
-                    ProSettingActionItem(Icons.Outlined.Info, Color(0xFF3B82F6), "Thông tin app") { showAppInfoDialog = true }
-                    ProSettingActionItem(Icons.Outlined.Logout, Color(0xFFEF4444), "Đăng xuất", textColor = Color.Red) {
-                        scope.launch { appDataStore.clearSession(); onLogout() }
-                    }
+                SettingsGroup("HỆ THỐNG") {
+                    ProSettingActionItem(Icons.Outlined.Lock, Color(0xFF64748B), "Đổi mật khẩu") { showChangePassDialog = true }
+                    Divider(Modifier.padding(horizontal = 16.dp), color = Color.Gray.copy(0.05f))
+                    ProSettingActionItem(Icons.Outlined.Info, Color(0xFF3B82F6), "Về ứng dụng") { showAppInfoDialog = true }
                 }
-            }
-            Spacer(modifier = Modifier.height(50.dp))
-        }
 
-        IconButton(onClick = onBack, modifier = Modifier.statusBarsPadding().padding(16.dp).background(Color.White.copy(0.5f), CircleShape)) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                Spacer(modifier = Modifier.height(32.dp))
+
+                Button(
+                    onClick = { scope.launch { appDataStore.clearSession(); onLogout() } },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFE4E6), contentColor = Color(0xFFE11D48))
+                ) {
+                    Icon(Icons.Outlined.Logout, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Đăng xuất", fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(50.dp))
+            }
         }
     }
 
     // --- DIALOGS ---
 
-    if (showPhoneDialog) {
-        AlertDialog(
-            onDismissRequest = { showPhoneDialog = false },
-            title = { Text("Số điện thoại") },
-            text = { OutlinedTextField(value = tempPhoneInput, onValueChange = { tempPhoneInput = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)) },
-            confirmButton = { Button(onClick = { updateProfile("phone", tempPhoneInput); showPhoneDialog = false }) { Text("Lưu") } }
-        )
+    // 1. Dialog Lịch (Nhập tay) - Đồng bộ Cloud
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val date = Date(millis)
+                        val formatted = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(date)
+                        updateProfile("dob", formatted)
+                    }
+                    showDatePicker = false
+                }) { Text("Xác nhận") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Hủy") } }
+        ) { DatePicker(state = datePickerState) }
     }
 
+    // 2. Dialog Giới tính - Đồng bộ Cloud
     if (showGenderDialog) {
         AlertDialog(
             onDismissRequest = { showGenderDialog = false },
-            title = { Text("Giới tính") },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = Color.White,
+            title = { Text("Chọn giới tính", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    listOf("Nam", "Nữ", "Khác").forEach { opt ->
-                        Row(Modifier.fillMaxWidth().clickable { updateProfile("gender", opt); showGenderDialog = false }.padding(12.dp)) {
-                            RadioButton(selected = (gender == opt), onClick = null)
-                            Text(opt, modifier = Modifier.padding(start = 8.dp))
+                    listOf("Nam", "Nữ", "Khác").forEach { option ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                updateProfile("gender", option)
+                                showGenderDialog = false
+                            }.padding(12.dp)
+                        ) {
+                            RadioButton(selected = (gender == option), onClick = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(option)
                         }
                     }
                 }
@@ -218,10 +280,32 @@ fun SettingsScreen(
         )
     }
 
+    // 3. Dialog Số điện thoại - Đồng bộ Cloud
+    if (showPhoneDialog) {
+        AlertDialog(
+            onDismissRequest = { showPhoneDialog = false },
+            shape = RoundedCornerShape(24.dp),
+            title = { Text("Cập nhật số điện thoại", fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = tempPhoneInput,
+                    onValueChange = { tempPhoneInput = it },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            },
+            confirmButton = {
+                Button(onClick = { updateProfile("phone", tempPhoneInput); showPhoneDialog = false }) { Text("Lưu") }
+            }
+        )
+    }
+
+    // 4. Dialog Đổi mật khẩu
     if (showChangePassDialog) {
         var isProcessing by remember { mutableStateOf(false) }
         AlertDialog(
-            onDismissRequest = { if (!isProcessing) showChangePassDialog = false },
+            onDismissRequest = { if(!isProcessing) showChangePassDialog = false },
             title = { Text("Đổi mật khẩu") },
             text = {
                 Column {
@@ -233,16 +317,16 @@ fun SettingsScreen(
             confirmButton = {
                 Button(onClick = {
                     val user = Firebase.auth.currentUser
-                    if (user != null && oldPassword.isNotEmpty() && newPassword.isNotEmpty()) {
+                    if (user?.email != null) {
                         isProcessing = true
                         val credential = EmailAuthProvider.getCredential(user.email!!, oldPassword)
                         user.reauthenticate(credential).addOnCompleteListener {
                             if (it.isSuccessful) {
                                 user.updatePassword(newPassword).addOnSuccessListener {
-                                    Toast.makeText(context, "Thành công", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Đổi mật khẩu thành công!", Toast.LENGTH_SHORT).show()
                                     showChangePassDialog = false
                                 }
-                            } else { Toast.makeText(context, "Sai mật khẩu", Toast.LENGTH_SHORT).show() }
+                            } else { Toast.makeText(context, "Sai mật khẩu cũ!", Toast.LENGTH_SHORT).show() }
                             isProcessing = false
                         }
                     }
@@ -265,21 +349,23 @@ fun SettingsScreen(
 
 @Composable
 fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.padding(vertical = 8.dp)) {
-        Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Gray, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
-        Surface(color = Color.White.copy(0.8f), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+    Column {
+        Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextSecondary, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
+        Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = CardBg, border = BorderStroke(1.dp, Color.White), shadowElevation = 2.dp) {
             Column { content() }
         }
     }
 }
 
 @Composable
-fun ProSettingActionItem(icon: ImageVector, color: Color, title: String, valueText: String? = null, textColor: Color = Color.Black, onClick: () -> Unit) {
+fun ProSettingActionItem(icon: ImageVector, color: Color, title: String, valueText: String? = null, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable { onClick() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(32.dp).background(color, RoundedCornerShape(8.dp)), Alignment.Center) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
+        Surface(Modifier.size(38.dp), shape = RoundedCornerShape(10.dp), color = color.copy(0.1f)) {
+            Icon(icon, null, tint = color, modifier = Modifier.padding(8.dp))
+        }
         Spacer(Modifier.width(16.dp))
-        Text(title, Modifier.weight(1f), color = textColor)
-        if (valueText != null) Text(valueText, color = Color.Gray, fontSize = 14.sp)
+        Text(title, Modifier.weight(1f), fontWeight = FontWeight.Medium, color = TextPrimary)
+        if (valueText != null) Text(valueText, color = TextSecondary, fontSize = 14.sp)
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.LightGray)
     }
 }
@@ -287,9 +373,11 @@ fun ProSettingActionItem(icon: ImageVector, color: Color, title: String, valueTe
 @Composable
 fun ProSettingSwitchItem(icon: ImageVector, color: Color, title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(32.dp).background(color, RoundedCornerShape(8.dp)), Alignment.Center) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
+        Surface(Modifier.size(38.dp), shape = RoundedCornerShape(10.dp), color = color.copy(0.1f)) {
+            Icon(icon, null, tint = color, modifier = Modifier.padding(8.dp))
+        }
         Spacer(Modifier.width(16.dp))
-        Text(title, Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Text(title, Modifier.weight(1f), fontWeight = FontWeight.Medium, color = TextPrimary)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedTrackColor = ModernBlue))
     }
 }
