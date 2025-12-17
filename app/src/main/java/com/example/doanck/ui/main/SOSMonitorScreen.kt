@@ -367,6 +367,7 @@ fun SOSCardItemNew(
             InfoRow(icon = Icons.Default.Call, text = sos.phone, isBold = true)
             Spacer(Modifier.height(16.dp))
 
+            // NÚT "TÔI ĐÃ AN TOÀN" (Chỉ hiện nếu là chính chủ)
             if (isMySOS) {
                 Button(
                     onClick = {

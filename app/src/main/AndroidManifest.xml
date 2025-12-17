@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -16,6 +19,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.DoAnCK"
         android:hardwareAccelerated="true">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -23,10 +27,14 @@
             android:theme="@style/Theme.WeatherConnect.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-    </application>
 
+        <service
+            android:name="vn.vietmap.services.android.navigation.v5.navigation.NavigationService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+    </application>
 </manifest>

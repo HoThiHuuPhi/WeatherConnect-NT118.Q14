@@ -125,10 +125,15 @@ fun AppNav(
         // 1. BẢN ĐỒ TỔNG QUAN - Hiển thị tất cả các ca SOS
         composable("rescue_map_overview") {
             RescueMapScreen(
-                onBack = { navController.popBackStack() }, // Quay về MainScreen
-                onOpenList = { navController.navigate("rescue_list") } // Mở danh sách
+                onBack = { navController.popBackStack() },
+                onOpenList = { navController.navigate("rescue_list") },
+                onOpenSOSDetail = { lat, lon, name ->
+                    val cleanName = name.ifBlank { "SOS" }.replace("/", "-")
+                    navController.navigate("sos_map/$lat/$lon/$cleanName")
+                }
             )
         }
+
 
         // 2. DANH SÁCH CÁC CA CỨU HỘ
         composable("rescue_list") {
@@ -163,7 +168,8 @@ fun AppNav(
                 lat = latStr.toDoubleOrNull() ?: 0.0,
                 lon = lonStr.toDoubleOrNull() ?: 0.0,
                 name = name,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onOpenRescueMap = { navController.navigate("rescue_map_overview") } // ✅ thêm dòng này
             )
         }
     }

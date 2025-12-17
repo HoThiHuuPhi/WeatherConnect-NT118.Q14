@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,16 +29,16 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class AIClothingAdvice(
-    val category: String,
-    val items: List<String>,
+// ✅ Mỗi lời khuyên có icon riêng
+data class AIWeatherTip(
     val emoji: String,
+    val advice: String,
     val reason: String
 )
 
 // Service gọi Claude API
-object ClothingAIService {
-    suspend fun getAIAdvice(
+object WeatherAIService {
+    suspend fun getAITips(
         tempC: Int,
         weatherCode: Int,
         weatherDesc: String,
@@ -45,15 +46,14 @@ object ClothingAIService {
         humidity: Double?,
         uvIndex: Double?,
         rainMm: Double?
-    ): List<AIClothingAdvice> {
+    ): List<AIWeatherTip> {
         return try {
             val prompt = buildPrompt(tempC, weatherCode, weatherDesc, windSpeedKmh, humidity, uvIndex, rainMm)
             val response = callClaudeAPI(prompt)
             parseAIResponse(response)
         } catch (e: Exception) {
             e.printStackTrace()
-            // Fallback về logic cũ nếu API lỗi
-            getFallbackAdvice(tempC, weatherCode, windSpeedKmh, humidity, uvIndex, rainMm)
+            getFallbackTips(tempC, weatherDesc, windSpeedKmh, humidity, uvIndex, rainMm)
         }
     }
 
@@ -67,38 +67,30 @@ object ClothingAIService {
         rain: Double?
     ): String {
         return """
-Bạn là chuyên gia tư vấn trang phục thời tiết tại Việt Nam. Dựa trên dữ liệu thời tiết sau, hãy đưa ra lời khuyên về trang phục:
+Bạn là trợ lý “Lời khuyên từ AI” cho ứng dụng thời tiết ở Việt Nam.
+Dựa trên dữ liệu thời tiết sau, hãy đưa ra lời khuyên ngắn gọn (quần áo + phụ kiện + lưu ý an toàn).
 
-**Thời tiết hiện tại:**
+**Dữ liệu:**
 - Nhiệt độ: ${tempC}°C
 - Tình trạng: $weatherDesc (mã: $weatherCode)
-- Tốc độ gió: ${windSpeed ?: "N/A"} km/h
+- Gió: ${windSpeed ?: "N/A"} km/h
 - Độ ẩm: ${humidity ?: "N/A"}%
-- Chỉ số UV: ${uv ?: "N/A"}
-- Lượng mưa: ${rain ?: 0.0} mm
+- UV: ${uv ?: "N/A"}
+- Mưa hiện tại: ${rain ?: 0.0} mm
 
-**Yêu cầu:**
-Trả về ĐÚNG format JSON sau (không thêm markdown backticks):
+**Yêu cầu output:**
+Chỉ trả về JSON (không markdown, không backticks), dạng:
 [
-  {
-    "category": "Lớp ngoài",
-    "items": ["Áo khoác", "Áo gió"],
-    "emoji": "🧥",
-    "reason": "Lý do ngắn gọn"
-  },
-  {
-    "category": "Quần",
-    "items": ["Quần dài", "Quần jean"],
-    "emoji": "👖",
-    "reason": "Lý do"
-  }
+  { "emoji": "☔", "advice": "Sắp mưa, nhớ mang ô/áo mưa", "reason": "Có dấu hiệu mưa/ẩm ướt" },
+  { "emoji": "🕶️", "advice": "UV cao, nên đeo kính râm", "reason": "Chỉ số UV cao" }
 ]
 
 **Quy tắc:**
-- Từ 5-7 danh mục: Lớp ngoài, Quần, Phụ kiện chống mưa/nắng/gió, Giày dép, Lưu ý đặc biệt
-- Mỗi item ngắn gọn, phù hợp người Việt
-- Reason dưới 20 từ
-- Chỉ trả về JSON, không text khác
+- 8–12 lời khuyên
+- Mỗi advice tối đa ~70 ký tự, dễ hiểu, đúng kiểu người Việt nói
+- Mỗi reason dưới 20 từ
+- Mỗi lời khuyên phải có emoji phù hợp (mưa/UV/nắng/gió/lạnh/nóng/trơn trượt/đủ nước…)
+- Không thêm chữ nào ngoài JSON
         """.trimIndent()
     }
 
@@ -110,12 +102,12 @@ Trả về ĐÚNG format JSON sau (không thêm markdown backticks):
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "application/json")
             conn.setRequestProperty("anthropic-version", "2023-06-01")
-            // API key sẽ được thêm tự động bởi hệ thống
+            // API key sẽ được thêm tự động bởi hệ thống của bạn (nếu bạn có cơ chế inject)
             conn.doOutput = true
 
             val requestBody = JSONObject().apply {
                 put("model", "claude-sonnet-4-20250514")
-                put("max_tokens", 2000)
+                put("max_tokens", 1200)
                 put("messages", JSONArray().apply {
                     put(JSONObject().apply {
                         put("role", "user")
@@ -135,75 +127,89 @@ Trả về ĐÚNG format JSON sau (không thêm markdown backticks):
         }
     }
 
-    private fun parseAIResponse(response: String): List<AIClothingAdvice> {
-        try {
-            val json = JSONObject(response)
-            val contentArray = json.getJSONArray("content")
-            var textContent = ""
+    private fun parseAIResponse(response: String): List<AIWeatherTip> {
+        val json = JSONObject(response)
+        val contentArray = json.getJSONArray("content")
+        var textContent = ""
 
-            for (i in 0 until contentArray.length()) {
-                val item = contentArray.getJSONObject(i)
-                if (item.getString("type") == "text") {
-                    textContent = item.getString("text")
-                    break
-                }
+        for (i in 0 until contentArray.length()) {
+            val item = contentArray.getJSONObject(i)
+            if (item.optString("type") == "text") {
+                textContent = item.optString("text")
+                break
             }
-
-            // Loại bỏ markdown backticks nếu có
-            val cleanJson = textContent
-                .replace("```json", "")
-                .replace("```", "")
-                .trim()
-
-            val adviceArray = JSONArray(cleanJson)
-            val result = mutableListOf<AIClothingAdvice>()
-
-            for (i in 0 until adviceArray.length()) {
-                val obj = adviceArray.getJSONObject(i)
-                val itemsArray = obj.getJSONArray("items")
-                val items = mutableListOf<String>()
-                for (j in 0 until itemsArray.length()) {
-                    items.add(itemsArray.getString(j))
-                }
-
-                result.add(AIClothingAdvice(
-                    category = obj.getString("category"),
-                    items = items,
-                    emoji = obj.getString("emoji"),
-                    reason = obj.getString("reason")
-                ))
-            }
-
-            return result
-        } catch (e: Exception) {
-            e.printStackTrace()
-            throw e
         }
+
+        val cleanJson = textContent
+            .replace("```json", "")
+            .replace("```", "")
+            .trim()
+
+        val arr = JSONArray(cleanJson)
+        val result = mutableListOf<AIWeatherTip>()
+
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            result.add(
+                AIWeatherTip(
+                    emoji = obj.getString("emoji"),
+                    advice = obj.getString("advice"),
+                    reason = obj.optString("reason", "")
+                )
+            )
+        }
+        return result
     }
 
-    // Fallback khi API lỗi
-    private fun getFallbackAdvice(
+    // Fallback khi API lỗi (vẫn đảm bảo mỗi dòng có icon)
+    private fun getFallbackTips(
         tempC: Int,
-        weatherCode: Int,
+        weatherDesc: String,
         windSpeed: Double?,
         humidity: Double?,
         uv: Double?,
         rain: Double?
-    ): List<AIClothingAdvice> {
-        val advice = mutableListOf<AIClothingAdvice>()
+    ): List<AIWeatherTip> {
+        val tips = mutableListOf<AIWeatherTip>()
 
-        // Logic đơn giản
+        // Nhiệt độ
         when {
-            tempC < 15 -> advice.add(AIClothingAdvice("Lớp ngoài", listOf("Áo khoác dày", "Áo len"), "🧥", "Nhiệt độ dưới 15°C"))
-            tempC < 22 -> advice.add(AIClothingAdvice("Lớp ngoài", listOf("Áo khoác mỏng", "Hoodie"), "🧥", "Trời mát"))
-            else -> advice.add(AIClothingAdvice("Áo", listOf("Áo thun", "Áo ba lỗ"), "👕", "Trời nóng"))
+            tempC <= 16 -> tips += AIWeatherTip("🧥", "Trời lạnh, mặc áo khoác/áo len", "Nhiệt độ thấp")
+            tempC in 17..23 -> tips += AIWeatherTip("🧥", "Trời mát, mang áo khoác mỏng", "Dễ lạnh về tối")
+            tempC >= 30 -> tips += AIWeatherTip("🧢", "Trời nóng, mặc đồ thoáng + đội nón", "Giảm sốc nhiệt")
+            else -> tips += AIWeatherTip("👕", "Mặc đồ thoải mái, thấm mồ hôi", "Thời tiết dễ chịu")
         }
 
+        // Mưa
         if ((rain ?: 0.0) > 0.1) {
-            advice.add(AIClothingAdvice("Chống mưa", listOf("Áo mưa", "Ô"), "☔", "Có mưa"))
+            tips += AIWeatherTip("☔", "Có mưa/ẩm ướt, nhớ mang ô hoặc áo mưa", "Tránh bị ướt")
+            tips += AIWeatherTip("👟", "Ưu tiên giày chống trơn, tránh dép trượt", "Đường dễ trơn")
+        } else {
+            tips += AIWeatherTip("🌤️", "Mang ô gấp phòng mưa bất chợt", "Thời tiết có thể đổi nhanh")
         }
 
-        return advice
+        // UV
+        when {
+            (uv ?: 0.0) >= 8 -> {
+                tips += AIWeatherTip("🕶️", "UV cao, đeo kính râm + áo chống nắng", "Bảo vệ da & mắt")
+                tips += AIWeatherTip("🧴", "Bôi kem chống nắng khi ra ngoài", "Giảm cháy nắng")
+            }
+            (uv ?: 0.0) >= 5 -> tips += AIWeatherTip("🧴", "UV trung bình, nên bôi chống nắng nhẹ", "Hạn chế sạm da")
+            else -> tips += AIWeatherTip("🙂", "UV thấp, vẫn nên che chắn nhẹ khi đi lâu", "Giữ da ổn định")
+        }
+
+        // Gió
+        if ((windSpeed ?: 0.0) >= 25) tips += AIWeatherTip("🌬️", "Gió mạnh, mặc áo gió/đóng khuy áo", "Tránh lạnh & bụi")
+
+        // Độ ẩm
+        if ((humidity ?: 0.0) >= 80) tips += AIWeatherTip("💧", "Độ ẩm cao, mặc đồ thoáng, mau khô", "Giảm bí bách")
+        if ((humidity ?: 100.0) <= 45) tips += AIWeatherTip("🫗", "Độ ẩm thấp, uống đủ nước", "Tránh khô da")
+
+        // Bổ sung cho đủ “nhiều thông tin”
+        tips += AIWeatherTip("🚶", "Nếu ra đường, xem trời trước khi đi xa", "Chủ động lịch trình")
+        tips += AIWeatherTip("📌", "Theo dõi cảnh báo thời tiết trong ngày", "Tránh thay đổi đột ngột")
+
+        return tips.take(12)
     }
 }
 
@@ -220,22 +226,26 @@ fun AIClothingAdvisorDialog(
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
 
-    // Define màu LightBlueSky thủ công vì không có sẵn trong Color
     val LightBlueSky = Color(0xFF87CEFA)
 
-    var advice by remember { mutableStateOf<List<AIClothingAdvice>?>(null) }
+    var tips by remember { mutableStateOf<List<AIWeatherTip>?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    fun reload() {
         scope.launch {
             try {
                 isLoading = true
                 error = null
-                advice = ClothingAIService.getAIAdvice(
-                    tempC, currentWeather.weatherCode, weatherDesc,
-                    windSpeedKmh, currentWeather.humidity, uvIndex, rainMm
+                tips = WeatherAIService.getAITips(
+                    tempC = tempC,
+                    weatherCode = currentWeather.weatherCode,
+                    weatherDesc = weatherDesc,
+                    windSpeedKmh = windSpeedKmh,
+                    humidity = currentWeather.humidity,
+                    uvIndex = uvIndex,
+                    rainMm = rainMm
                 )
             } catch (e: Exception) {
                 error = "Lỗi kết nối AI: ${e.message}"
@@ -245,12 +255,14 @@ fun AIClothingAdvisorDialog(
         }
     }
 
+    LaunchedEffect(Unit) { reload() }
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = screenHeight * 0.85f) // Giới hạn chiều cao max
-                .wrapContentHeight(), // QUAN TRỌNG: Tự co lại nếu nội dung ngắn
+                .heightIn(max = screenHeight * 0.85f)
+                .wrapContentHeight(),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
@@ -278,41 +290,24 @@ fun AIClothingAdvisorDialog(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "🤖 AI Tư Vấn Trang Phục",
-                                fontSize = 18.sp, // Giảm size chút cho đỡ bị tràn
+                                text = "🤖 Lời khuyên từ AI",
+                                fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF2D3748) // Đổi sang màu tối để nổi trên nền sáng
+                                color = Color(0xFF2D3748)
                             )
                             Text(
-                                text = "Powered by Claude AI",
+                                text = "Dựa trên dữ liệu thời tiết hôm nay",
                                 fontSize = 12.sp,
-                                color = Color(0xFF4A5568) // Màu tối
+                                color = Color(0xFF4A5568)
                             )
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (!isLoading) {
-                                IconButton(onClick = {
-                                    scope.launch {
-                                        isLoading = true
-                                        advice = null // Reset để hiện loading view
-                                        try {
-                                            advice = ClothingAIService.getAIAdvice(
-                                                tempC, currentWeather.weatherCode, weatherDesc,
-                                                windSpeedKmh, currentWeather.humidity, uvIndex, rainMm
-                                            )
-                                        } catch (e: Exception) {
-                                            error = "Lỗi: ${e.message}"
-                                        } finally {
-                                            isLoading = false
-                                        }
-                                    }
-                                }) {
-                                    // Icon màu tối
+                                IconButton(onClick = { reload() }) {
                                     Icon(Icons.Default.Refresh, "Làm mới", tint = Color(0xFF2D3748))
                                 }
                             }
-                            // Nút Close trên Header
                             IconButton(onClick = onDismiss) {
                                 Icon(Icons.Default.Close, "Đóng", tint = Color(0xFF2D3748))
                             }
@@ -321,11 +316,9 @@ fun AIClothingAdvisorDialog(
                 }
 
                 // --- CONTENT ---
-                // Không dùng weight(1f) ở đây để tránh bị kéo giãn
                 Box(modifier = Modifier.fillMaxWidth()) {
                     when {
                         isLoading -> {
-                            // Set chiều cao cố định cho lúc loading để nó gọn gàng
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -335,9 +328,10 @@ fun AIClothingAdvisorDialog(
                             ) {
                                 CircularProgressIndicator(color = LightBlueSky)
                                 Spacer(Modifier.height(16.dp))
-                                Text("AI đang suy nghĩ...", color = Color.Gray)
+                                Text("AI đang tổng hợp lời khuyên...", color = Color.Gray)
                             }
                         }
+
                         error != null -> {
                             Column(
                                 modifier = Modifier
@@ -352,7 +346,8 @@ fun AIClothingAdvisorDialog(
                                 Button(onClick = onDismiss) { Text("Đóng") }
                             }
                         }
-                        advice != null -> {
+
+                        tips != null -> {
                             Column(
                                 modifier = Modifier
                                     .verticalScroll(rememberScrollState())
@@ -373,7 +368,7 @@ fun AIClothingAdvisorDialog(
                                         Spacer(Modifier.width(12.dp))
                                         Column {
                                             Text(
-                                                "Thời tiết hôm nay",
+                                                "Thời tiết hiện tại",
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 14.sp,
                                                 color = Color(0xFF2D3748)
@@ -389,9 +384,9 @@ fun AIClothingAdvisorDialog(
 
                                 Spacer(Modifier.height(16.dp))
 
-                                // List Advice
-                                advice!!.forEach { item ->
-                                    AIClothingAdviceItem(item)
+                                // ✅ List lời khuyên (mỗi dòng có icon)
+                                tips!!.forEach { tip ->
+                                    AITipItem(tip)
                                     Spacer(Modifier.height(12.dp))
                                 }
 
@@ -400,12 +395,11 @@ fun AIClothingAdvisorDialog(
                                     fontSize = 11.sp,
                                     color = Color.Gray,
                                     modifier = Modifier.padding(vertical = 8.dp),
-                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                    fontStyle = FontStyle.Italic
                                 )
 
                                 Spacer(Modifier.height(8.dp))
 
-                                // --- NÚT ĐÓNG TO Ở DƯỚI ---
                                 Button(
                                     onClick = onDismiss,
                                     modifier = Modifier.fillMaxWidth(),
@@ -427,81 +421,44 @@ fun AIClothingAdvisorDialog(
 }
 
 @Composable
-private fun AIClothingAdviceItem(advice: AIClothingAdvice) {
+private fun AITipItem(tip: AIWeatherTip) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFFAFBFC)
-        ),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFAFBFC)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFEDF2F7)),
+                contentAlignment = Alignment.Center
             ) {
-                // Emoji background
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFEDF2F7)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(advice.emoji, fontSize = 22.sp)
-                }
-                Spacer(Modifier.width(12.dp))
+                Text(tip.emoji, fontSize = 22.sp)
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = advice.category,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF2D3748)
+                    text = tip.advice,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF2D3748),
+                    lineHeight = 18.sp
                 )
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            advice.items.forEach { item ->
-                Row(
-                    modifier = Modifier.padding(vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF667EEA))
-                    )
-                    Spacer(Modifier.width(12.dp))
+                if (tip.reason.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
                     Text(
-                        text = item,
-                        fontSize = 14.sp,
-                        color = Color(0xFF4A5568),
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Reason với background nhẹ
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                color = Color(0xFFF7FAFC)
-            ) {
-                Row(
-                    modifier = Modifier.padding(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("💭", fontSize = 14.sp)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = advice.reason,
-                        fontSize = 13.sp,
+                        text = tip.reason,
+                        fontSize = 12.sp,
                         color = Color(0xFF718096),
-                        lineHeight = 18.sp
+                        lineHeight = 16.sp
                     )
                 }
             }
