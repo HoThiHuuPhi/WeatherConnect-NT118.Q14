@@ -39,13 +39,58 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+// =======================
+// TEXT NORMALIZE HELPERS
+// =======================
 fun removeAccents(str: String): String {
-    try {
+    return try {
         val temp = java.text.Normalizer.normalize(str, java.text.Normalizer.Form.NFD)
         val pattern = java.util.regex.Pattern.compile("\\p{InCombiningDiacriticalMarks}+")
-        return pattern.matcher(temp).replaceAll("").lowercase().replace("đ", "d")
+        pattern.matcher(temp).replaceAll("").lowercase().replace("đ", "d")
     } catch (e: Exception) {
-        return str.lowercase()
+        str.lowercase()
+    }
+}
+
+fun normalizeSpaces(s: String): String = s.trim().replace(Regex("\\s+"), " ")
+
+/**
+ * Key để distinct/so sánh tỉnh:
+ * - bỏ dấu
+ * - bỏ tiền tố "Tỉnh", "Thành phố", "TP."
+ * - gom về 1 chuẩn để khỏi bị lặp
+ */
+fun normalizeProvinceKey(name: String): String {
+    var s = normalizeSpaces(name)
+
+    s = s.replace(Regex("^(tinh|tỉnh)\\s+", RegexOption.IGNORE_CASE), "")
+    s = s.replace(
+        Regex("^(thanh\\s*pho|thành\\s*phố|tp\\.?|t\\.p\\.?)(\\s+)", RegexOption.IGNORE_CASE),
+        ""
+    )
+
+    return removeAccents(s)
+}
+
+/**
+ * Trích đúng tên tỉnh/TP từ chuỗi address có dạng:
+ * "... , Dĩ An, Bình Dương, Việt Nam"
+ * -> "Bình Dương"
+ */
+fun extractProvince(raw: String?): String? {
+    if (raw.isNullOrBlank()) return null
+
+    val parts = raw.split(",")
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+
+    if (parts.isEmpty()) return null
+
+    val last = parts.last()
+    return if (removeAccents(last) == removeAccents("Việt Nam")) {
+        parts.dropLast(1).lastOrNull()?.let { normalizeSpaces(it) }
+    } else {
+        normalizeSpaces(last)
     }
 }
 
@@ -60,11 +105,11 @@ fun SOSMonitorScreen(
     var isLoading by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
 
-    // Biến cho bộ lọc Tỉnh
-    var selectedProvince by remember { mutableStateOf("Tất cả") }
+    // ✅ tỉnh đang chọn
+    var selectedProvince by remember { mutableStateOf("Tất cả các tỉnh") }
     var expandedProvinceMenu by remember { mutableStateOf(false) }
 
-    // Lấy dữ liệu Realtime
+    // Realtime
     DisposableEffect(Unit) {
         val query = Firebase.firestore.collection("sos_requests")
             .orderBy("timestamp", Query.Direction.DESCENDING)
@@ -79,27 +124,32 @@ fun SOSMonitorScreen(
         onDispose { listener.remove() }
     }
 
-    // Tự động lấy danh sách tỉnh
+    // ✅ Danh sách tỉnh/TP: lấy từ extractProvince + distinct theo key chuẩn hoá
     val provinceList = remember(sosList) {
-        val provinces = sosList.mapNotNull { it.province }
+        val provincesRaw = sosList.mapNotNull { extractProvince(it.province) }
             .filter { it.isNotBlank() }
-            .distinct()
-            .sorted()
-        listOf("Tất cả") + provinces
+
+        val provinces = provincesRaw
+            .sortedBy { it.length } // ưu tiên chuỗi ngắn (vd "Bình Dương")
+            .distinctBy { normalizeProvinceKey(it) } // ✅ chống lặp triệt để
+            .sortedBy { normalizeProvinceKey(it) }
+
+        listOf("Tất cả các tỉnh") + provinces
     }
 
-    // Logic Lọc
+    // ✅ Lọc list
     val filteredList = sosList.filter { sos ->
         val matchSearch = if (searchQuery.isBlank()) true else {
-            val query = removeAccents(searchQuery.trim())
-            val provinceNorm = removeAccents(sos.province ?: "")
-            val messageNorm = removeAccents(sos.message)
-            val phoneRaw = sos.phone
-            provinceNorm.contains(query) || messageNorm.contains(query) || phoneRaw.contains(query)
+            val q = removeAccents(searchQuery.trim())
+            val msgNorm = removeAccents(sos.message)
+            msgNorm.contains(q) || removeAccents(sos.phone).contains(q)
         }
-        val matchProvince = if (selectedProvince == "Tất cả") true else {
-            sos.province == selectedProvince
+
+        val sosProvince = extractProvince(sos.province).orEmpty()
+        val matchProvince = if (selectedProvince == "Tất cả các tỉnh") true else {
+            normalizeProvinceKey(sosProvince) == normalizeProvinceKey(selectedProvince)
         }
+
         matchSearch && matchProvince
     }
 
@@ -107,13 +157,23 @@ fun SOSMonitorScreen(
         topBar = {
             Column(Modifier.background(Color.White)) {
                 TopAppBar(
-                    title = { Text("Danh sách Cứu Trợ", fontWeight = FontWeight.Bold, color = Color.Red) },
-                    navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                    title = {
+                        Text(
+                            "Danh sách Cứu Trợ",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Red
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        }
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
                 )
 
-                // Thanh tìm kiếm & Bộ lọc
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    // Search
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
@@ -122,9 +182,17 @@ fun SOSMonitorScreen(
                         leadingIcon = { Icon(Icons.Default.Search, null) },
                         trailingIcon = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = onOpenMapOverview) { Icon(Icons.Default.Map, "Map", tint = Color(0xFF1976D2)) }
+                                IconButton(onClick = onOpenMapOverview) {
+                                    Icon(
+                                        Icons.Default.Map,
+                                        "Map",
+                                        tint = Color(0xFF1976D2)
+                                    )
+                                }
                                 if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Clear, "Clear") }
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(Icons.Default.Clear, "Clear")
+                                    }
                                 }
                             }
                         },
@@ -134,22 +202,28 @@ fun SOSMonitorScreen(
 
                     Spacer(Modifier.height(8.dp))
 
-                    // Dropdown Tỉnh
+                    // Dropdown tỉnh
                     Box(modifier = Modifier.fillMaxWidth()) {
                         OutlinedButton(
                             onClick = { expandedProvinceMenu = true },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (selectedProvince != "Tất cả") Color(0xFFE3F2FD) else Color.Transparent
-                            ),
-                            border = if (selectedProvince != "Tất cả") null else ButtonDefaults.outlinedButtonBorder
+                                containerColor =
+                                    if (selectedProvince != "Tất cả các tỉnh") Color(0xFFE3F2FD)
+                                    else Color.Transparent
+                            )
                         ) {
                             Icon(Icons.Default.FilterList, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = if (selectedProvince == "Tất cả") "Lọc theo khu vực: Tất cả" else "Đang lọc: $selectedProvince",
-                                color = if (selectedProvince != "Tất cả") Color(0xFF1976D2) else Color.Gray
+                                text = selectedProvince,
+                                color =
+                                    if (selectedProvince != "Tất cả các tỉnh") Color(0xFF1976D2)
+                                    else Color.Gray,
+                                fontWeight =
+                                    if (selectedProvince != "Tất cả các tỉnh") FontWeight.Bold
+                                    else FontWeight.Normal
                             )
                             Spacer(Modifier.weight(1f))
                             Icon(Icons.Default.ArrowDropDown, null)
@@ -158,14 +232,27 @@ fun SOSMonitorScreen(
                         DropdownMenu(
                             expanded = expandedProvinceMenu,
                             onDismissRequest = { expandedProvinceMenu = false },
-                            modifier = Modifier.fillMaxWidth(0.9f).background(Color.White)
+                            modifier = Modifier
+                                .fillMaxWidth(0.9f)
+                                .background(Color.White)
                         ) {
                             provinceList.forEach { province ->
                                 DropdownMenuItem(
                                     text = {
-                                        Text(province, fontWeight = if (province == selectedProvince) FontWeight.Bold else FontWeight.Normal, color = if (province == selectedProvince) Color(0xFF1976D2) else Color.Black)
+                                        Text(
+                                            text = province,
+                                            fontWeight =
+                                                if (province == selectedProvince) FontWeight.Bold
+                                                else FontWeight.Normal,
+                                            color =
+                                                if (province == selectedProvince) Color(0xFF1976D2)
+                                                else Color.Black
+                                        )
                                     },
-                                    onClick = { selectedProvince = province; expandedProvinceMenu = false }
+                                    onClick = {
+                                        selectedProvince = province
+                                        expandedProvinceMenu = false
+                                    }
                                 )
                             }
                         }
@@ -173,22 +260,21 @@ fun SOSMonitorScreen(
                 }
                 Divider(color = Color(0xFFEEEEEE))
             }
-        },
-        containerColor = Color(0xFFF2F4F8)
+        }
     ) { padding ->
         if (isLoading) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        } else if (filteredList.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Search, null, tint = Color.Gray, modifier = Modifier.size(48.dp))
-                    Spacer(Modifier.height(16.dp))
-                    Text(if (searchQuery.isNotEmpty()) "Không tìm thấy kết quả" else "Không có tin SOS nào", color = Color.Gray)
-                }
-            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) { CircularProgressIndicator() }
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp)
             ) {
@@ -207,29 +293,40 @@ fun SOSCardItemNew(
 ) {
     val context = LocalContext.current
     val dateFormat = SimpleDateFormat("HH:mm - dd/MM", Locale.getDefault())
-    val timeString = try { dateFormat.format(Date(sos.timestamp)) } catch (e: Exception) { "Vừa xong" }
-    val provinceDisplay = if (!sos.province.isNullOrBlank()) "📍 ${sos.province}" else "📍 Chưa xác định"
+    val timeString = try {
+        dateFormat.format(Date(sos.timestamp))
+    } catch (e: Exception) {
+        "Vừa xong"
+    }
 
-    // 👇 Kiểm tra xem tin này có phải của tôi không
+    // Hiển thị tỉnh/TP dạng đẹp: dùng extractProvince thay vì raw
+    val provinceText = extractProvince(sos.province)
+    val provinceDisplay = if (!provinceText.isNullOrBlank()) "📍 $provinceText" else "📍 Chưa xác định"
+
     val currentUser = FirebaseAuth.getInstance().currentUser
     val isMySOS = currentUser != null && currentUser.uid == sos.userId
 
     ElevatedCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         shape = RoundedCornerShape(16.dp),
-        // Nếu là tin của mình -> Màu nền hơi vàng để dễ nhận biết
         colors = CardDefaults.cardColors(containerColor = if (isMySOS) Color(0xFFFFF8E1) else Color.White),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Header
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(color = Color(0xFFFFEBEE), shape = RoundedCornerShape(8.dp)) {
-                    Text("SOS KHẨN CẤP", color = Color.Red, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                    Text(
+                        "SOS KHẨN CẤP",
+                        color = Color.Red,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.AccessTime, null, tint = Color.Gray, modifier = Modifier.size(14.dp))
@@ -237,49 +334,59 @@ fun SOSCardItemNew(
                     Text(timeString, fontSize = 12.sp, color = Color.Gray)
                 }
             }
+
             Spacer(Modifier.height(8.dp))
 
-            // Địa điểm
-            Text(provinceDisplay, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1976D2))
+            Text(
+                provinceDisplay,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF1976D2)
+            )
+
             Spacer(Modifier.height(8.dp))
 
-            // Nội dung
-            Text(sos.message.ifBlank { "Không có nội dung mô tả" }, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1F2937), lineHeight = 24.sp)
+            Text(
+                sos.message.ifBlank { "Không có nội dung mô tả" },
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1F2937),
+                lineHeight = 24.sp
+            )
+
             Spacer(Modifier.height(12.dp))
             Divider(color = Color.Gray.copy(alpha = 0.1f))
             Spacer(Modifier.height(12.dp))
 
-            // Thông tin liên hệ
             InfoRow(
                 icon = Icons.Default.Person,
-                text = if(isMySOS) "Bạn (Chính chủ)" else sos.email.ifBlank { "Ẩn danh" },
+                text = if (isMySOS) "Bạn (Chính chủ)" else sos.email.ifBlank { "Ẩn danh" },
                 isBold = isMySOS
             )
             Spacer(Modifier.height(6.dp))
             InfoRow(icon = Icons.Default.Call, text = sos.phone, isBold = true)
             Spacer(Modifier.height(16.dp))
 
-            // 🟢 NÚT "TÔI ĐÃ AN TOÀN" (Chỉ hiện nếu là chính chủ)
             if (isMySOS) {
                 Button(
                     onClick = {
-                        // Xóa tin khỏi Firebase dựa vào ID
                         if (sos.docId.isNotEmpty()) {
-                            Firebase.firestore.collection("sos_requests").document(sos.docId).delete()
+                            Firebase.firestore.collection("sos_requests")
+                                .document(sos.docId)
+                                .delete()
                                 .addOnSuccessListener {
                                     Toast.makeText(context, "Đã cập nhật an toàn!", Toast.LENGTH_SHORT).show()
                                 }
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)) // Màu xanh lá
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
                 ) {
                     Text("TÔI ĐÃ ĐƯỢC CỨU (XÓA TIN)")
                 }
                 Spacer(Modifier.height(8.dp))
             }
 
-            // Các nút hành động khác
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(
                     onClick = {
@@ -294,6 +401,7 @@ fun SOSCardItemNew(
                     Spacer(Modifier.width(8.dp))
                     Text("Gọi điện")
                 }
+
                 Button(
                     onClick = {
                         val safeName = if (sos.phone.isNotBlank()) sos.phone else "SOS"
@@ -318,14 +426,26 @@ fun InfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String,
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(8.dp))
-        Text(text, fontSize = 14.sp, color = if (isBold) Color.Black else Color.DarkGray, fontWeight = if (isBold) FontWeight.SemiBold else FontWeight.Normal)
+        Text(
+            text,
+            fontSize = 14.sp,
+            color = if (isBold) Color.Black else Color.DarkGray,
+            fontWeight = if (isBold) FontWeight.SemiBold else FontWeight.Normal
+        )
     }
 }
 
 @Composable
 fun EmptyState(padding: PaddingValues) {
-    Column(modifier = Modifier.fillMaxSize().padding(padding), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Box(modifier = Modifier.size(120.dp).background(Color(0xFFE3F2FD), CircleShape), contentAlignment = Alignment.Center) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(padding),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier.size(120.dp).background(Color(0xFFE3F2FD), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
             Icon(Icons.Default.LocationOn, null, tint = Color(0xFF2196F3), modifier = Modifier.size(60.dp))
         }
         Spacer(Modifier.height(24.dp))

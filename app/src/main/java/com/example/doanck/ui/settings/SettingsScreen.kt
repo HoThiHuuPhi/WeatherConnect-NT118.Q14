@@ -304,33 +304,97 @@ fun SettingsScreen(
     // 4. Dialog Đổi mật khẩu
     if (showChangePassDialog) {
         var isProcessing by remember { mutableStateOf(false) }
+
+        // Reset mật khẩu khi đóng/mở dialog
+        DisposableEffect(Unit) {
+            onDispose {
+                oldPassword = ""
+                newPassword = ""
+            }
+        }
+
         AlertDialog(
-            onDismissRequest = { if(!isProcessing) showChangePassDialog = false },
-            title = { Text("Đổi mật khẩu") },
+            onDismissRequest = { if (!isProcessing) showChangePassDialog = false },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = Color.White,
+            title = { Text("Bảo mật tài khoản", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    OutlinedTextField(value = oldPassword, onValueChange = { oldPassword = it }, label = { Text("Mật khẩu cũ") }, visualTransformation = PasswordVisualTransformation())
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(value = newPassword, onValueChange = { newPassword = it }, label = { Text("Mật khẩu mới") }, visualTransformation = PasswordVisualTransformation())
+                    Text("Vui lòng xác nhận mật khẩu cũ trước khi thay đổi.", fontSize = 14.sp, color = TextSecondary)
+                    Spacer(Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = oldPassword,
+                        onValueChange = { oldPassword = it },
+                        label = { Text("Mật khẩu hiện tại") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true,
+                        enabled = !isProcessing
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = newPassword,
+                        onValueChange = { newPassword = it },
+                        label = { Text("Mật khẩu mới (ít nhất 6 ký tự)") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true,
+                        enabled = !isProcessing
+                    )
+
+                    if (isProcessing) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
+                    }
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    val user = Firebase.auth.currentUser
-                    if (user?.email != null) {
-                        isProcessing = true
-                        val credential = EmailAuthProvider.getCredential(user.email!!, oldPassword)
-                        user.reauthenticate(credential).addOnCompleteListener {
-                            if (it.isSuccessful) {
-                                user.updatePassword(newPassword).addOnSuccessListener {
-                                    Toast.makeText(context, "Đổi mật khẩu thành công!", Toast.LENGTH_SHORT).show()
-                                    showChangePassDialog = false
+                Button(
+                    enabled = !isProcessing && oldPassword.isNotEmpty() && newPassword.length >= 6,
+                    onClick = {
+                        val user = Firebase.auth.currentUser
+                        val userEmail = user?.email
+
+                        if (user != null && userEmail != null) {
+                            isProcessing = true
+                            // 1. Xác thực lại người dùng bằng mật khẩu cũ
+                            val credential = EmailAuthProvider.getCredential(userEmail, oldPassword)
+
+                            user.reauthenticate(credential)
+                                .addOnSuccessListener {
+                                    // 2. Nếu xác thực đúng -> Cập nhật mật khẩu mới
+                                    user.updatePassword(newPassword)
+                                        .addOnSuccessListener {
+                                            Toast.makeText(context, "Đã cập nhật mật khẩu mới!", Toast.LENGTH_SHORT).show()
+                                            showChangePassDialog = false
+                                            isProcessing = false
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Toast.makeText(context, "Lỗi cập nhật: ${e.message}", Toast.LENGTH_LONG).show()
+                                            isProcessing = false
+                                        }
                                 }
-                            } else { Toast.makeText(context, "Sai mật khẩu cũ!", Toast.LENGTH_SHORT).show() }
+                                .addOnFailureListener {
+                                    Toast.makeText(context, "Mật khẩu cũ không chính xác!", Toast.LENGTH_SHORT).show()
+                                    isProcessing = false
+                                }
+                        } else {
+                            Toast.makeText(context, "Phiên đăng nhập hết hạn. Vui lòng thử lại.", Toast.LENGTH_SHORT).show()
                             isProcessing = false
                         }
                     }
-                }) { Text("Lưu") }
+                ) {
+                    Text(if (isProcessing) "Đang xử lý..." else "Cập nhật")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isProcessing,
+                    onClick = { showChangePassDialog = false }
+                ) { Text("Hủy") }
             }
         )
     }
