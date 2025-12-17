@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -19,16 +20,14 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -61,24 +60,22 @@ fun SearchScreen(onBack: () -> Unit) {
     val tempUnit by dataStore.tempUnit.collectAsState(initial = "C")
     val enableAnimation by dataStore.enableAnimation.collectAsState(initial = true)
 
-    // --- STATES ---
     var searchText by remember { mutableStateOf("") }
     val searchSuggestions = remember { mutableStateListOf<LocationData>() }
     var selectedLocation by remember { mutableStateOf<LocationData?>(null) }
     var isSearching by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
-    var currentBackgroundData by remember { mutableStateOf(WeatherBackground(WeatherEffectType.CLOUDY, 0xFFB0E0E6, 0xFFFFFACD)) }
+    var currentBackgroundData by remember {
+        mutableStateOf(WeatherBackground(WeatherEffectType.CLOUDY, 0xFFB0E0E6, 0xFFFFFACD))
+    }
 
-    val OrangeHot = Color(0xFFFF6D00)
-    val DarkBlue = Color(0xFF1E3A8A)
-
-    val smokedGlassGradient = remember { Brush.verticalGradient(listOf(Color(0xFF7BCBEC).copy(alpha = 0.25f), Color(0xFFB0BEC5).copy(alpha = 0.10f))) }
-    val softBorderGradient = remember { Brush.linearGradient(listOf(Color.White.copy(alpha = 0.35f), Color.White.copy(alpha = 0.05f))) }
-
-    //Chức năng gợi ý tìm kiếm dựa trên Geocoder
     fun performSearch(query: String) {
-        if (query.isBlank()) { searchSuggestions.clear(); return }
-        isSearching = true; searchError = null
+        if (query.isBlank()) {
+            searchSuggestions.clear()
+            return
+        }
+        isSearching = true
+        searchError = null
         if (selectedLocation != null) selectedLocation = null
 
         scope.launch(Dispatchers.IO) {
@@ -90,58 +87,292 @@ fun SearchScreen(onBack: () -> Unit) {
                     searchSuggestions.clear()
                     if (!addresses.isNullOrEmpty()) {
                         addresses.forEach {
-                            val parts = listOfNotNull(it.featureName, it.subAdminArea, it.adminArea, it.countryName)
-                            searchSuggestions.add(LocationData(it.latitude, it.longitude, parts.distinct().joinToString(", ")))
+                            val parts = listOfNotNull(
+                                it.featureName,
+                                it.subAdminArea,
+                                it.adminArea,
+                                it.countryName
+                            )
+                            searchSuggestions.add(
+                                LocationData(
+                                    it.latitude,
+                                    it.longitude,
+                                    parts.distinct().joinToString(", ")
+                                )
+                            )
                         }
                     }
                     isSearching = false
                 }
-            } catch (e: Exception) { withContext(Dispatchers.Main) { searchError = "Lỗi: ${e.message}"; isSearching = false } }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    searchError = "Lỗi: ${e.message}"
+                    isSearching = false
+                }
+            }
         }
     }
 
     LaunchedEffect(searchText) {
-        if (searchText.length > 1) { delay(800); performSearch(searchText) } else searchSuggestions.clear()
+        if (searchText.length > 1) {
+            delay(800)
+            performSearch(searchText)
+        } else {
+            searchSuggestions.clear()
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (enableAnimation) DynamicWeatherBackground(currentBackgroundData, Modifier.fillMaxSize())
-        else Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(currentBackgroundData.gradientStartColor), Color(currentBackgroundData.gradientEndColor)))))
+        // Background
+        if (enableAnimation) {
+            DynamicWeatherBackground(currentBackgroundData, Modifier.fillMaxSize())
+        } else {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color(currentBackgroundData.gradientStartColor),
+                                Color(currentBackgroundData.gradientEndColor)
+                            )
+                        )
+                    )
+            )
+        }
 
         Column(modifier = Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp)) {
-                Box(Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(100)).background(smokedGlassGradient).border(1.dp, softBorderGradient, RoundedCornerShape(100))) {
-                    Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = OrangeHot) }
-                        OutlinedTextField(
-                            value = searchText, onValueChange = { searchText = it; if (selectedLocation != null) selectedLocation = null },
-                            placeholder = { Text("Nhập tên thành phố...", color = OrangeHot.copy(0.7f), fontSize = 18.sp) },
-                            modifier = Modifier.weight(1f), singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent, cursorColor = OrangeHot, focusedTextColor = OrangeHot, unfocusedTextColor = Color.White),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { performSearch(searchText); keyboardController?.hide() })
+            // HEADER SEARCH BAR - GRADIENT ĐẸP
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(16.dp)
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .shadow(12.dp, RoundedCornerShape(20.dp))
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFFB0E0E6), // Sky Blue
+                                    Color(0xFF87CEEB), // Light Sky Blue
+                                    Color(0xFFFFFACD)  // Lemon Chiffon
+                                )
+                            ),
+                            shape = RoundedCornerShape(20.dp)
                         )
-                        if (isSearching) CircularProgressIndicator(Modifier.size(28.dp).padding(end = 12.dp), strokeWidth = 3.dp, color = OrangeHot)
-                        else IconButton(onClick = { performSearch(searchText); keyboardController?.hide() }) { Icon(Icons.Default.Search, "Search", tint = OrangeHot) }
+                ) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // NÚT BACK
+                        Surface(
+                            modifier = Modifier.size(48.dp),
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.9f),
+                            shadowElevation = 4.dp
+                        ) {
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    "Back",
+                                    tint = Color(0xFF1976D2)
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // TEXT FIELD
+                        OutlinedTextField(
+                            value = searchText,
+                            onValueChange = {
+                                searchText = it
+                                if (selectedLocation != null) selectedLocation = null
+                            },
+                            placeholder = {
+                                Text(
+                                    "Tìm kiếm thành phố...",
+                                    color = Color(0xFF1565C0).copy(0.6f),
+                                    fontSize = 16.sp
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedBorderColor = Color.Transparent,
+                                cursorColor = Color(0xFF1976D2),
+                                focusedTextColor = Color(0xFF1565C0),
+                                unfocusedTextColor = Color(0xFF424242)
+                            ),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(
+                                onSearch = {
+                                    performSearch(searchText)
+                                    keyboardController?.hide()
+                                }
+                            )
+                        )
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // SEARCH BUTTON
+                        if (isSearching) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(32.dp),
+                                strokeWidth = 3.dp,
+                                color = Color(0xFF1976D2)
+                            )
+                        } else {
+                            Surface(
+                                modifier = Modifier.size(48.dp),
+                                shape = CircleShape,
+                                color = Color.White.copy(alpha = 0.9f),
+                                shadowElevation = 4.dp
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        performSearch(searchText)
+                                        keyboardController?.hide()
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        "Search",
+                                        tint = Color(0xFF1976D2)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
 
+            // CONTENT AREA
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
-                    selectedLocation != null -> SearchWeatherResult(selectedLocation!!.lat, selectedLocation!!.lon, selectedLocation!!.cityName.split(",").firstOrNull() ?: selectedLocation!!.cityName, tempUnit) { currentBackgroundData = it }
-                    searchSuggestions.isNotEmpty() -> LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
-                        item { Text("Kết quả tìm kiếm:", color = DarkBlue, fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)) }
-                        items(searchSuggestions) { loc ->
-                            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(0.2f)).clickable { selectedLocation = loc; keyboardController?.hide() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.LocationOn, null, tint = OrangeHot, modifier = Modifier.size(24.dp))
-                                Spacer(Modifier.width(12.dp))
-                                Text(loc.cityName, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    selectedLocation != null -> {
+                        SearchWeatherResult(
+                            selectedLocation!!.lat,
+                            selectedLocation!!.lon,
+                            selectedLocation!!.cityName.split(",").firstOrNull()
+                                ?: selectedLocation!!.cityName,
+                            tempUnit
+                        ) { currentBackgroundData = it }
+                    }
+                    searchSuggestions.isNotEmpty() -> {
+                        LazyColumn(
+                            Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 20.dp),
+                            contentPadding = PaddingValues(bottom = 12.dp)
+                        ) {
+                            item {
+                                Text(
+                                    "Kết quả tìm kiếm:",
+                                    color = Color(0xFF1565C0),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(bottom = 12.dp, start = 4.dp)
+                                )
                             }
-                            Spacer(Modifier.height(8.dp))
+                            items(searchSuggestions) { loc ->
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(
+                                            brush = Brush.horizontalGradient(
+                                                colors = listOf(
+                                                    Color.White.copy(0.25f),
+                                                    Color.White.copy(0.15f)
+                                                )
+                                            )
+                                        )
+                                        .clickable {
+                                            selectedLocation = loc
+                                            keyboardController?.hide()
+                                        }
+                                        .padding(16.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = Color(0xFF1976D2),
+                                            modifier = Modifier.size(40.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    Icons.Default.LocationOn,
+                                                    null,
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(
+                                            loc.cityName,
+                                            color = Color.White,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(8.dp))
+                            }
                         }
                     }
-                    searchError != null -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Default.Warning, null, tint = Color.White, modifier = Modifier.size(48.dp)); Text(searchError!!, color = Color.White, modifier = Modifier.padding(top = 8.dp)) }
-                    else -> Column(Modifier.align(Alignment.Center).offset(y = (-50).dp), horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Default.Search, null, tint = DarkBlue.copy(0.3f), modifier = Modifier.size(100.dp)); Text(if (searchText.isBlank()) "Nhập địa điểm để xem thời tiết" else "Không tìm thấy kết quả", color = DarkBlue.copy(0.6f), fontSize = 16.sp) }
+                    searchError != null -> {
+                        Column(
+                            Modifier.align(Alignment.Center),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                null,
+                                tint = Color.White,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Text(
+                                searchError!!,
+                                color = Color.White,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+                    }
+                    else -> {
+                        Column(
+                            Modifier
+                                .align(Alignment.Center)
+                                .offset(y = (-50).dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                Icons.Default.Search,
+                                null,
+                                tint = Color.White.copy(0.3f),
+                                modifier = Modifier.size(100.dp)
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                if (searchText.isBlank())
+                                    "Nhập địa điểm để xem thời tiết"
+                                else
+                                    "Không tìm thấy kết quả",
+                                color = Color.White.copy(0.8f),
+                                fontSize = 16.sp
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -154,7 +385,8 @@ fun SearchWeatherResult(
     lon: Double,
     cityName: String,
     tempUnit: String,
-    onBackgroundChange: (WeatherBackground) -> Unit) {
+    onBackgroundChange: (WeatherBackground) -> Unit
+) {
     var weatherData by remember { mutableStateOf<WeatherUIData?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -167,7 +399,6 @@ fun SearchWeatherResult(
     var rawHourly by remember { mutableStateOf<HourlyUnits?>(null) }
     var elevationM by remember { mutableStateOf<Double?>(null) }
     var currentStartIndex by remember { mutableIntStateOf(0) }
-
 
     fun convertTemp(c: Double?): Int {
         if (c == null) return 0
@@ -225,12 +456,19 @@ fun SearchWeatherResult(
             val hourlyList = mutableListOf<HourlyDisplayItem>()
             for (i in startIndex until startIndex + 24) {
                 if (i >= hourly.time.size) break
-                val hourLabel = if (i == startIndex) "Bây giờ" else hourly.time.getOrElse(i) { "00h" }.substring(11, 13) + "h"
+                val hourLabel = if (i == startIndex) "Bây giờ"
+                else hourly.time.getOrElse(i) { "00h" }.substring(11, 13) + "h"
                 val isHourDay = hourly.isDayList.getOrNull(i) == 1
                 val temp = convertTemp(hourly.temperatures.getOrNull(i))
                 val code = hourly.weatherCodes.getOrElse(i) { 0 }
 
-                hourlyList.add(HourlyDisplayItem(hourLabel, WeatherUtils.getWeatherIcon(code, isHourDay), temp))
+                hourlyList.add(
+                    HourlyDisplayItem(
+                        hourLabel,
+                        WeatherUtils.getWeatherIcon(code, isHourDay),
+                        temp
+                    )
+                )
             }
 
             val hourlyTempsByDate = mutableMapOf<String, MutableList<Int>>()
@@ -256,37 +494,70 @@ fun SearchWeatherResult(
                     else -> dayFormatter.format(localDate)
                 }
 
-                dailyItems.add(DailyDisplayItem(
-                    dayLabel = label,
-                    dateLabel = formatDateShort(dateStr),
-                    icon = WeatherUtils.getWeatherIcon(daily.weatherCodes.getOrElse(index) { 0 }, true),
-                    minTemp = convertTemp(daily.minTemperatures.getOrNull(index)),
-                    maxTemp = convertTemp(daily.maxTemperatures.getOrNull(index)),
-                    rainProbability = daily.rainProbabilities?.getOrNull(index),
-                    rainSumMm = daily.rainSums?.getOrNull(index),
-                    hourlyTemps = hourlyTempsByDate[dateStr] ?: emptyList(),
-                    hourlyWeatherCodes = hourlyCodesByDate[dateStr] ?: emptyList()
-                ))
+                dailyItems.add(
+                    DailyDisplayItem(
+                        dayLabel = label,
+                        dateLabel = formatDateShort(dateStr),
+                        icon = WeatherUtils.getWeatherIcon(
+                            daily.weatherCodes.getOrElse(index) { 0 },
+                            true
+                        ),
+                        minTemp = convertTemp(daily.minTemperatures.getOrNull(index)),
+                        maxTemp = convertTemp(daily.maxTemperatures.getOrNull(index)),
+                        rainProbability = daily.rainProbabilities?.getOrNull(index),
+                        rainSumMm = daily.rainSums?.getOrNull(index),
+                        hourlyTemps = hourlyTempsByDate[dateStr] ?: emptyList(),
+                        hourlyWeatherCodes = hourlyCodesByDate[dateStr] ?: emptyList()
+                    )
+                )
             }
 
-            val summary = WeatherUtils.generateSummaryText(hourly.weatherCodes, hourly.windGusts)
+            val summary = WeatherUtils.generateSummaryText(
+                hourly.weatherCodes,
+                hourly.windGusts
+            )
 
             weatherData = WeatherUIData(currentDisplay, hourlyList, dailyItems, summary)
 
         } catch (e: Exception) {
             e.printStackTrace()
             errorMessage = "Lỗi tải dữ liệu: ${e.message}"
-        } finally { isLoading = false }
+        } finally {
+            isLoading = false
+        }
     }
 
     if (isLoading) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color.White) }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Color.White)
+        }
     } else if (errorMessage != null) {
-        Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Icon(Icons.Default.Warning, contentDescription = null, tint = Color.Red, modifier = Modifier.size(48.dp))
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                Icons.Default.Warning,
+                contentDescription = null,
+                tint = Color.Red,
+                modifier = Modifier.size(48.dp)
+            )
             Spacer(Modifier.height(16.dp))
-            Text("Không thể hiển thị thời tiết", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text(errorMessage!!, color = Color.White.copy(0.7f), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+            Text(
+                "Không thể hiển thị thời tiết",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                errorMessage!!,
+                color = Color.White.copy(0.7f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 8.dp)
+            )
         }
     } else weatherData?.let { data ->
         Box(Modifier.fillMaxSize()) {
@@ -298,13 +569,9 @@ fun SearchWeatherResult(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 MainWeatherDisplay(data.current, tempUnit)
-
                 Spacer(Modifier.height(36.dp))
-
                 HourlyForecastSection(data.summary, data.hourly, tempUnit)
-
                 Spacer(Modifier.height(24.dp))
-
                 DailyForecastSection(
                     items = data.daily,
                     unit = tempUnit,
@@ -331,22 +598,17 @@ fun SearchWeatherResult(
                         rainSumMm = d.rainSums?.firstOrNull() ?: d.rainSum?.firstOrNull(),
                         snowfallMm = c.snowfall,
                         humidityPercent = c.humidity,
-
                         pressureMslHPa = c.pressureMsl,
                         pressureHPa = c.pressure,
                         elevationM = elevationM,
-
                         cape = h.cape?.getOrNull(currentStartIndex),
-
                         cloudCover = c.cloudCover,
                         cloudLow = h.cloudCoverLow?.getOrNull(currentStartIndex),
                         cloudMid = h.cloudCoverMid?.getOrNull(currentStartIndex),
                         cloudHigh = h.cloudCoverHigh?.getOrNull(currentStartIndex),
-
                         soilMoisture0_1 = h.soilMoisture0to1?.getOrNull(currentStartIndex),
                         soilMoisture1_3 = h.soilMoisture3to9?.getOrNull(currentStartIndex),
                         soilMoisture3_9 = h.soilMoisture9to27?.getOrNull(currentStartIndex),
-
                         dewPoint = c.dewPoint2m,
                         sunshineDurationSeconds = d.sunshineDuration?.firstOrNull()
                     )
@@ -355,7 +617,11 @@ fun SearchWeatherResult(
         }
 
         if (showDetailSheet && selectedDay != null) {
-            WeatherDetailBottomSheet(day = selectedDay!!, unit = tempUnit, onDismiss = { showDetailSheet = false })
+            WeatherDetailBottomSheet(
+                day = selectedDay!!,
+                unit = tempUnit,
+                onDismiss = { showDetailSheet = false }
+            )
         }
     }
 }
