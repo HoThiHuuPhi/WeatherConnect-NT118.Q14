@@ -1,6 +1,7 @@
 package com.example.doanck.ui.main
 
 import android.Manifest
+import com.example.doanck.R
 import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -24,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -167,12 +169,16 @@ fun MainScreen(
                             Toast.makeText(context, "Đang tải dữ liệu thời tiết...", Toast.LENGTH_SHORT).show()
                         }
                     },
-                    containerColor = Color(0xFF667EEA),
-                    contentColor = Color.White,
+                    containerColor = Color(0xFF69CFDC),
                     shape = CircleShape,
                     modifier = Modifier.size(56.dp)
                 ) {
-                    Text("👔", fontSize = 24.sp)
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_ai),
+                        contentDescription = "AI Suggestion",
+                        modifier = Modifier.size(28.dp),
+                        tint = Color.Unspecified
+                    )
                 }
 
                 // NÚT SOS

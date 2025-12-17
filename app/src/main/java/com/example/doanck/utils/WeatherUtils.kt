@@ -188,33 +188,33 @@ object WeatherUtils {
                 )
             }
 
-            // 2: Mây rải rác (Partly Cloudy) - Bắt đầu có sắc xám
+            // 2: Mây rải rác (Partly Cloudy) - Style iOS (Xanh đêm sâu)
             2 -> if (isDay) {
                 WeatherBackground(
                     effectType = WeatherEffectType.CLOUDY,
-                    gradientStartColor = 0xFF5D7E9F, // Xám xanh
-                    gradientEndColor = 0xFFB8C6DB
+                    gradientStartColor = 0xFF4A90E2, // Xanh Blue sáng
+                    gradientEndColor = 0xFFADC4E5   // Xanh nhạt
                 )
             } else {
                 WeatherBackground(
                     effectType = WeatherEffectType.CLOUDY,
-                    gradientStartColor = 0xFF1F2633,
-                    gradientEndColor = 0xFF3E4A5E
+                    gradientStartColor = 0xFF1A2A6C, // Xanh đêm (Midnight Blue)
+                    gradientEndColor = 0xFF2D3436   // Xám đen nhẹ (Charcoal)
                 )
             }
 
-            // 3: Trời nhiều mây (Overcast) - Xám xịt
+            // 3: Trời nhiều mây (Overcast) - Tối hơn và mịt mù hơn
             3 -> if (isDay) {
                 WeatherBackground(
                     effectType = WeatherEffectType.CLOUDY,
-                    gradientStartColor = 0xFF63707D, // Xám chì
-                    gradientEndColor = 0xFFAAB7C4  // Xám bạc
+                    gradientStartColor = 0xFF6082B6, // Xanh xám
+                    gradientEndColor = 0xFFBDC3C7   // Xám bạc
                 )
             } else {
                 WeatherBackground(
                     effectType = WeatherEffectType.CLOUDY,
-                    gradientStartColor = 0xFF232526,
-                    gradientEndColor = 0xFF414345
+                    gradientStartColor = 0xFF0B101B, // Gần như đen (Deep Space)
+                    gradientEndColor = 0xFF1C2541   // Xanh đen mờ
                 )
             }
 
@@ -377,8 +377,8 @@ object WeatherUtils {
             // 95: Có sấm sét (Thunderstorm) - Tím than
             95 -> WeatherBackground(
                 effectType = WeatherEffectType.STORM,
-                gradientStartColor = 0xFF1A2980, // Deep Indigo
-                gradientEndColor = 0xFF26D0CE  // Cyan tint
+                gradientStartColor = 0xFF0F0C29, // Xanh tím đen (Midnight Blue)
+                gradientEndColor = 0xFF302B63    // Tím than (Deep Purple Slate)
             )
 
             // 96: Dông bão + Mưa đá nhẹ
@@ -415,7 +415,9 @@ fun FullWeatherCodePreview() {
         DetailedWeatherItem(0, "0: Clear Sky (Night)", false),
         DetailedWeatherItem(1, "1: Mainly Clear", true),
         DetailedWeatherItem(2, "2: Partly Cloudy", true),
+        DetailedWeatherItem(2, "2: Partly Cloudy", false),
         DetailedWeatherItem(3, "3: Overcast", true),
+        DetailedWeatherItem(3, "3: Overcast", false),
         DetailedWeatherItem(45, "45: Fog", true),
         DetailedWeatherItem(51, "51: Light Drizzle", true),
         DetailedWeatherItem(53, "53: Mod Drizzle", true),
