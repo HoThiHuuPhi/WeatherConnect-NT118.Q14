@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.doanck"
-        minSdk = 29
+        minSdk = 28
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -94,5 +94,5 @@ dependencies {
 
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("com.google.android.material:material:1.10.0")
-
+    implementation("io.coil-kt:coil-compose:2.4.0")
 }

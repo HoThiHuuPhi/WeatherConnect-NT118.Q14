@@ -1,22 +1,15 @@
 package com.example.doanck.ui.main
 
 import android.app.DatePickerDialog
-import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -40,18 +33,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import com.example.doanck.data.datastore.AppDataStore
-import kotlinx.coroutines.launch
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.google.firebase.storage.ktx.storage
+import kotlinx.coroutines.launch
 import java.util.Calendar
-
-// --- MÀU SẮC CHUYÊN NGHIỆP ---
-val BackgroundGradientStart = Color(0xFFF0F4F8)
-val BackgroundGradientEnd = Color(0xFFD9E2EC)
-val SurfaceColor = Color.White.copy(alpha = 0.75f)
-val PrimaryTextColor = Color(0xFF102A43)
-val SecondaryTextColor = Color(0xFF486581)
 
 @Composable
 fun SettingsScreen(
@@ -61,517 +50,246 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val scrollState = rememberScrollState()
+    val db = Firebase.firestore
+    val auth = Firebase.auth
+    val storage = Firebase.storage
+    val currentUser = auth.currentUser
 
-    // --- DATASTORE STATES (Dữ liệu thực từ bộ nhớ máy) ---
+    // --- STATES DỮ LIỆU TỪ CLOUD ---
+    var userProfile by remember { mutableStateOf<Map<String, Any>>(emptyMap()) }
+    var isAvatarUploading by remember { mutableStateOf(false) }
+
+    // Lắng nghe dữ liệu Realtime từ Firestore
+    LaunchedEffect(currentUser?.uid) {
+        if (currentUser != null) {
+            db.collection("users").document(currentUser.uid)
+                .addSnapshotListener { snapshot, _ ->
+                    if (snapshot != null && snapshot.exists()) {
+                        userProfile = snapshot.data ?: emptyMap()
+                    }
+                }
+        }
+    }
+
+    // Giá trị hiển thị từ Cloud
+    val dateOfBirth = userProfile["dob"]?.toString() ?: "01/01/2000"
+    val phoneNumber = userProfile["phone"]?.toString() ?: "Chưa cập nhật"
+    val gender = userProfile["gender"]?.toString() ?: "Nam"
+    val avatarUrl = userProfile["avatarUrl"]?.toString()
+
+    // Cài đặt Local từ DataStore
     val enableAnimation by appDataStore.enableAnimation.collectAsState(initial = true)
     val tempUnit by appDataStore.tempUnit.collectAsState(initial = "C")
-    val userEmail by appDataStore.userEmail.collectAsState(initial = "Đang tải...")
-    val avatarUriString by appDataStore.userAvatar.collectAsState(initial = null)
 
-    // ✅ 1. Thay đổi: Lấy thông tin cá nhân từ DataStore thay vì biến tạm
-    val dateOfBirth by appDataStore.userDob.collectAsState(initial = "01/01/2000")
-    val phoneNumber by appDataStore.userPhone.collectAsState(initial = "Chưa cập nhật")
-    val gender by appDataStore.userGender.collectAsState(initial = "Nam")
-
-    // --- UI States (Dialogs) ---
+    // --- UI STATES ---
     var showChangePassDialog by remember { mutableStateOf(false) }
-    var showAppInfoDialog by remember { mutableStateOf(false) }
+    var showPhoneDialog by remember { mutableStateOf(false) }
     var showGenderDialog by remember { mutableStateOf(false) }
-    var showPhoneDialog by remember { mutableStateOf(false) } // Thêm dialog sửa SĐT
+    var showAppInfoDialog by remember { mutableStateOf(false) }
 
+    var tempPhoneInput by remember { mutableStateOf("") }
     var oldPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
-    var tempPhoneInput by remember { mutableStateOf("") } // Biến tạm nhập SĐT
 
-    // --- Logic DatePicker ---
-    val calendar = Calendar.getInstance()
-    val datePickerDialog = DatePickerDialog(
-        context,
-        { _, year, month, dayOfMonth ->
-            val newDob = "$dayOfMonth/${month + 1}/$year"
-            // ✅ 2. Thay đổi: Lưu vào DataStore ngay khi chọn xong
-            scope.launch { appDataStore.saveDob(newDob) }
-        },
-        calendar.get(Calendar.YEAR),
-        calendar.get(Calendar.MONTH),
-        calendar.get(Calendar.DAY_OF_MONTH)
-    )
+    // --- HÀM CẬP NHẬT FIRESTORE ---
+    fun updateProfile(key: String, value: Any) {
+        currentUser?.uid?.let { uid ->
+            db.collection("users").document(uid).set(mapOf(key to value), SetOptions.merge())
+                .addOnFailureListener { Toast.makeText(context, "Lỗi đồng bộ!", Toast.LENGTH_SHORT).show() }
+        }
+    }
 
-    // --- Logic Thay đổi Avatar ---
-    val avatarLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        uri?.let {
-            val takeFlags: Int = Intent.FLAG_GRANT_READ_URI_PERMISSION
-            try {
-                context.contentResolver.takePersistableUriPermission(it, takeFlags)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            scope.launch {
-                appDataStore.saveAvatarForCurrentUser(it.toString())
+    // --- LOGIC UPLOAD ẢNH ---
+    val avatarLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let { selectedUri ->
+            currentUser?.uid?.let { uid ->
+                isAvatarUploading = true
+                val ref = storage.reference.child("avatars/$uid.jpg")
+                ref.putFile(selectedUri).addOnSuccessListener {
+                    ref.downloadUrl.addOnSuccessListener { downloadUrl ->
+                        updateProfile("avatarUrl", downloadUrl.toString())
+                        isAvatarUploading = false
+                    }
+                }.addOnFailureListener { isAvatarUploading = false }
             }
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(BackgroundGradientStart, BackgroundGradientEnd)
-                )
-            )
-    ) {
-        // --- NỘI DUNG CHÍNH ---
+    // --- DATE PICKER ---
+    val calendar = Calendar.getInstance()
+    val datePickerDialog = DatePickerDialog(context, { _, y, m, d ->
+        updateProfile("dob", "$d/${m + 1}/$y")
+    }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH))
+
+    Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFFF0F4F8), Color(0xFFD9E2EC))))) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 0.dp)
-                .verticalScroll(scrollState),
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(60.dp))
-
-            Text(
-                text = "Cài đặt",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = PrimaryTextColor
-            )
-
+            Text("Cài đặt", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- PROFILE SECTION ---
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(contentAlignment = Alignment.BottomEnd) {
-                    val painter = if (avatarUriString != null) {
-                        rememberAsyncImagePainter(avatarUriString)
-                    } else {
-                        rememberAsyncImagePainter(android.R.drawable.sym_def_app_icon)
-                    }
-
+            // --- AVATAR ---
+            Box(contentAlignment = Alignment.BottomEnd) {
+                if (isAvatarUploading) {
+                    CircularProgressIndicator(modifier = Modifier.size(110.dp))
+                } else {
                     Image(
-                        painter = painter,
-                        contentDescription = "Avatar",
+                        painter = rememberAsyncImagePainter(avatarUrl ?: android.R.drawable.sym_def_app_icon),
+                        contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(110.dp)
-                            .clip(CircleShape)
-                            .border(4.dp, Color.White, CircleShape)
-                            .shadow(8.dp, CircleShape)
-                            .clickable { avatarLauncher.launch(arrayOf("image/*")) }
+                        modifier = Modifier.size(110.dp).clip(CircleShape).border(4.dp, Color.White, CircleShape)
+                            .clickable { avatarLauncher.launch("image/*") }
                     )
-
-                    Surface(
-                        shape = CircleShape,
-                        color = Color(0xFF3B82F6),
-                        border = BorderStroke(2.dp, Color.White),
-                        modifier = Modifier.size(36.dp).offset(x = 4.dp, y = 4.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                        }
-                    }
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = userEmail,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PrimaryTextColor
-                )
-                Text(
-                    text = "Thành viên tích cực",
-                    fontSize = 14.sp,
-                    color = SecondaryTextColor
-                )
+                IconButton(onClick = { avatarLauncher.launch("image/*") }, modifier = Modifier.size(32.dp).background(Color(0xFF3B82F6), CircleShape)) {
+                    Icon(Icons.Default.CameraAlt, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-
-                // === GROUP: HỒ SƠ CÁ NHÂN ===
-                SettingsGroup(title = "Hồ sơ cá nhân") {
-                    // Ngày sinh
-                    ProSettingActionItem(
-                        icon = Icons.Outlined.CalendarToday,
-                        iconBgColor = Color(0xFFEC4899),
-                        title = "Ngày sinh",
-                        valueText = dateOfBirth
-                    ) {
-                        datePickerDialog.show()
-                    }
-
-                    Divider(color = Color.Gray.copy(0.1f), thickness = 1.dp, modifier = Modifier.padding(start = 56.dp))
-
-                    // Số điện thoại
-                    ProSettingActionItem(
-                        icon = Icons.Outlined.Phone,
-                        iconBgColor = Color(0xFF0EA5E9),
-                        title = "Số điện thoại",
-                        valueText = phoneNumber
-                    ) {
-                        tempPhoneInput = phoneNumber // Load số cũ vào dialog
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                SettingsGroup("Hồ sơ cá nhân (Cloud)") {
+                    ProSettingActionItem(Icons.Outlined.CalendarToday, Color(0xFFEC4899), "Ngày sinh", dateOfBirth) { datePickerDialog.show() }
+                    ProSettingActionItem(Icons.Outlined.Phone, Color(0xFF0EA5E9), "Số điện thoại", phoneNumber) {
+                        tempPhoneInput = if(phoneNumber == "Chưa cập nhật") "" else phoneNumber
                         showPhoneDialog = true
                     }
+                    ProSettingActionItem(Icons.Outlined.Person, Color(0xFF8B5CF6), "Giới tính", gender) { showGenderDialog = true }
+                }
 
-                    Divider(color = Color.Gray.copy(0.1f), thickness = 1.dp, modifier = Modifier.padding(start = 56.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-                    // Giới tính
-                    ProSettingActionItem(
-                        icon = Icons.Outlined.Person,
-                        iconBgColor = Color(0xFF8B5CF6),
-                        title = "Giới tính",
-                        valueText = gender
-                    ) {
-                        showGenderDialog = true
+                SettingsGroup("Cài đặt ứng dụng") {
+                    ProSettingSwitchItem(Icons.Default.Animation, Color(0xFF8B5CF6), "Hiệu ứng động", enableAnimation) {
+                        scope.launch { appDataStore.setEnableAnimation(it) }
+                    }
+                    ProSettingActionItem(Icons.Default.Thermostat, Color(0xFFF59E0B), "Đơn vị nhiệt độ", "Độ $tempUnit") {
+                        scope.launch { appDataStore.setTempUnit(if (tempUnit == "C") "F" else "C") }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Group: Chung
-                SettingsGroup(title = "Chung") {
-                    ProSettingSwitchItem(
-                        icon = Icons.Default.Animation,
-                        iconBgColor = Color(0xFF8B5CF6),
-                        title = "Hiệu ứng thời tiết động",
-                        checked = enableAnimation,
-                        onCheckedChange = { scope.launch { appDataStore.setEnableAnimation(it) } }
-                    )
-                    Divider(color = Color.Gray.copy(0.1f), thickness = 1.dp, modifier = Modifier.padding(start = 56.dp))
-                    ProSettingActionItem(
-                        icon = Icons.Default.Thermostat,
-                        iconBgColor = Color(0xFFF59E0B),
-                        title = "Đơn vị nhiệt độ",
-                        valueText = "Độ $tempUnit"
-                    ) {
-                        scope.launch {
-                            val newUnit = if (tempUnit == "C") "F" else "C"
-                            appDataStore.setTempUnit(newUnit)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Group: Tài khoản
-                SettingsGroup(title = "Tài khoản") {
-                    ProSettingActionItem(
-                        icon = Icons.Outlined.Lock,
-                        iconBgColor = Color(0xFF10B981),
-                        title = "Đổi mật khẩu"
-                    ) {
-                        oldPassword = ""
-                        newPassword = ""
-                        showChangePassDialog = true
-                    }
-                    Divider(color = Color.Gray.copy(0.1f), thickness = 1.dp, modifier = Modifier.padding(start = 56.dp))
-                    ProSettingActionItem(
-                        icon = Icons.Outlined.Logout,
-                        iconBgColor = Color(0xFFEF4444),
-                        title = "Đăng xuất",
-                        textColor = Color(0xFFEF4444)
-                    ) {
-                        scope.launch {
-                            appDataStore.clearSession()
-                            onLogout()
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Group: Thông tin
-                SettingsGroup(title = "Thông tin") {
-                    ProSettingActionItem(
-                        icon = Icons.Outlined.Info,
-                        iconBgColor = Color(0xFF3B82F6),
-                        title = "Về ứng dụng này"
-                    ) {
-                        showAppInfoDialog = true
+                SettingsGroup("Hệ thống") {
+                    ProSettingActionItem(Icons.Outlined.Lock, Color(0xFF10B981), "Đổi mật khẩu") { showChangePassDialog = true }
+                    ProSettingActionItem(Icons.Outlined.Info, Color(0xFF3B82F6), "Thông tin app") { showAppInfoDialog = true }
+                    ProSettingActionItem(Icons.Outlined.Logout, Color(0xFFEF4444), "Đăng xuất", textColor = Color.Red) {
+                        scope.launch { appDataStore.clearSession(); onLogout() }
                     }
                 }
             }
             Spacer(modifier = Modifier.height(50.dp))
         }
 
-        // --- NÚT BACK ---
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(top = 8.dp, start = 16.dp)
-                .size(40.dp)
-                .background(Color.White.copy(alpha = 0.5f), CircleShape)
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = PrimaryTextColor,
-                modifier = Modifier.padding(8.dp)
-            )
+        IconButton(onClick = onBack, modifier = Modifier.statusBarsPadding().padding(16.dp).background(Color.White.copy(0.5f), CircleShape)) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
         }
     }
 
-    // ================== DIALOGS ==================
+    // --- DIALOGS ---
 
-    // 1. Dialog Đổi mật khẩu
+    if (showPhoneDialog) {
+        AlertDialog(
+            onDismissRequest = { showPhoneDialog = false },
+            title = { Text("Số điện thoại") },
+            text = { OutlinedTextField(value = tempPhoneInput, onValueChange = { tempPhoneInput = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)) },
+            confirmButton = { Button(onClick = { updateProfile("phone", tempPhoneInput); showPhoneDialog = false }) { Text("Lưu") } }
+        )
+    }
+
+    if (showGenderDialog) {
+        AlertDialog(
+            onDismissRequest = { showGenderDialog = false },
+            title = { Text("Giới tính") },
+            text = {
+                Column {
+                    listOf("Nam", "Nữ", "Khác").forEach { opt ->
+                        Row(Modifier.fillMaxWidth().clickable { updateProfile("gender", opt); showGenderDialog = false }.padding(12.dp)) {
+                            RadioButton(selected = (gender == opt), onClick = null)
+                            Text(opt, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showGenderDialog = false }) { Text("Đóng") } }
+        )
+    }
+
     if (showChangePassDialog) {
         var isProcessing by remember { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = { if (!isProcessing) showChangePassDialog = false },
-            containerColor = Color.White,
-            title = { Text("Đổi mật khẩu", fontWeight = FontWeight.Bold) },
+            title = { Text("Đổi mật khẩu") },
             text = {
                 Column {
-                    OutlinedTextField(
-                        value = oldPassword,
-                        onValueChange = { oldPassword = it },
-                        label = { Text("Mật khẩu cũ") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        singleLine = true,
-                        enabled = !isProcessing,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = newPassword,
-                        onValueChange = { newPassword = it },
-                        label = { Text("Mật khẩu mới (min 6 ký tự)") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        singleLine = true,
-                        enabled = !isProcessing,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (isProcessing) {
-                        Spacer(Modifier.height(16.dp))
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
+                    OutlinedTextField(value = oldPassword, onValueChange = { oldPassword = it }, label = { Text("Mật khẩu cũ") }, visualTransformation = PasswordVisualTransformation())
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(value = newPassword, onValueChange = { newPassword = it }, label = { Text("Mật khẩu mới") }, visualTransformation = PasswordVisualTransformation())
                 }
             },
             confirmButton = {
-                Button(
-                    enabled = !isProcessing,
-                    onClick = {
-                        val user = Firebase.auth.currentUser
-                        if (user != null && user.email != null && oldPassword.isNotEmpty() && newPassword.isNotEmpty()) {
-                            if (newPassword.length < 6) {
-                                Toast.makeText(context, "Mật khẩu quá ngắn", Toast.LENGTH_SHORT).show()
-                                return@Button
-                            }
-                            isProcessing = true
-                            val credential = EmailAuthProvider.getCredential(user.email!!, oldPassword)
-                            user.reauthenticate(credential).addOnCompleteListener { authTask ->
-                                if (authTask.isSuccessful) {
-                                    user.updatePassword(newPassword).addOnCompleteListener { updateTask ->
-                                        isProcessing = false
-                                        if (updateTask.isSuccessful) {
-                                            Toast.makeText(context, "Thành công!", Toast.LENGTH_SHORT).show()
-                                            showChangePassDialog = false
-                                        } else {
-                                            Toast.makeText(context, "Lỗi: ${updateTask.exception?.message}", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                } else {
-                                    isProcessing = false
-                                    Toast.makeText(context, "Sai mật khẩu cũ", Toast.LENGTH_SHORT).show()
+                Button(onClick = {
+                    val user = Firebase.auth.currentUser
+                    if (user != null && oldPassword.isNotEmpty() && newPassword.isNotEmpty()) {
+                        isProcessing = true
+                        val credential = EmailAuthProvider.getCredential(user.email!!, oldPassword)
+                        user.reauthenticate(credential).addOnCompleteListener {
+                            if (it.isSuccessful) {
+                                user.updatePassword(newPassword).addOnSuccessListener {
+                                    Toast.makeText(context, "Thành công", Toast.LENGTH_SHORT).show()
+                                    showChangePassDialog = false
                                 }
-                            }
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
-                ) { Text("Lưu") }
-            },
-            dismissButton = {
-                TextButton(enabled = !isProcessing, onClick = { showChangePassDialog = false }) { Text("Hủy") }
-            }
-        )
-    }
-
-    // 2. Dialog Giới tính
-    if (showGenderDialog) {
-        AlertDialog(
-            onDismissRequest = { showGenderDialog = false },
-            containerColor = Color.White,
-            title = { Text("Chọn giới tính", fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    listOf("Nam", "Nữ", "Khác").forEach { option ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    // ✅ 3. Thay đổi: Lưu vào DataStore
-                                    scope.launch { appDataStore.saveGender(option) }
-                                    showGenderDialog = false
-                                }
-                                .padding(vertical = 12.dp)
-                        ) {
-                            RadioButton(
-                                selected = (gender == option),
-                                onClick = {
-                                    scope.launch { appDataStore.saveGender(option) }
-                                    showGenderDialog = false
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = option, fontSize = 16.sp)
+                            } else { Toast.makeText(context, "Sai mật khẩu", Toast.LENGTH_SHORT).show() }
+                            isProcessing = false
                         }
                     }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showGenderDialog = false }) { Text("Đóng") }
+                }) { Text("Lưu") }
             }
         )
     }
 
-    // 3. Dialog Đổi Số điện thoại (Mới thêm)
-    if (showPhoneDialog) {
-        AlertDialog(
-            onDismissRequest = { showPhoneDialog = false },
-            containerColor = Color.White,
-            title = { Text("Cập nhật Số điện thoại", fontWeight = FontWeight.Bold) },
-            text = {
-                OutlinedTextField(
-                    value = tempPhoneInput,
-                    onValueChange = { tempPhoneInput = it },
-                    label = { Text("Số điện thoại") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        scope.launch { appDataStore.savePhone(tempPhoneInput) }
-                        showPhoneDialog = false
-                        Toast.makeText(context, "Đã lưu số điện thoại", Toast.LENGTH_SHORT).show()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0EA5E9))
-                ) { Text("Lưu") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPhoneDialog = false }) { Text("Hủy") }
-            }
-        )
-    }
-
-    // 4. Dialog Thông tin App
     if (showAppInfoDialog) {
         AlertDialog(
             onDismissRequest = { showAppInfoDialog = false },
-            icon = {
-                Box(modifier = Modifier.size(50.dp).background(Color(0xFFE0F2FE), CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Info, contentDescription = null, tint = Color(0xFF0EA5E9))
-                }
-            },
-            containerColor = Color.White,
-            title = { Text("Weather Connect", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    Text("Phiên bản 1.0.0 (Beta)", color = SecondaryTextColor)
-                    Spacer(Modifier.height(8.dp))
-                    Text("Phát triển bởi:", fontSize = 12.sp, color = SecondaryTextColor)
-                    Text("Minh Châu & Hữu Phi", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = PrimaryTextColor)
-                }
-            },
-            confirmButton = {
-                Button(onClick = { showAppInfoDialog = false }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))) {
-                    Text("Đóng")
-                }
-            }
+            title = { Text("Weather Connect") },
+            text = { Text("Phiên bản 1.0.0\nPhát triển bởi Minh Châu & Hữu Phi") },
+            confirmButton = { Button(onClick = { showAppInfoDialog = false }) { Text("Đóng") } }
         )
     }
 }
 
-// ==========================================
-// 🔥 CUSTOM COMPONENTS
-// ==========================================
+// --- UI HELPERS ---
 
 @Composable
 fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column {
-        Text(
-            text = title,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = SecondaryTextColor,
-            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-        )
-        Surface(
-            color = SurfaceColor,
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column {
-                content()
-            }
+    Column(Modifier.padding(vertical = 8.dp)) {
+        Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Gray, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
+        Surface(color = Color.White.copy(0.8f), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+            Column { content() }
         }
     }
 }
 
 @Composable
-fun ProSettingSwitchItem(
-    icon: ImageVector,
-    iconBgColor: Color,
-    title: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier.size(32.dp).background(iconBgColor, RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(imageVector = icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-        }
-        Spacer(modifier = Modifier.width(16.dp))
-        Text(text = title, fontSize = 16.sp, color = PrimaryTextColor, modifier = Modifier.weight(1f))
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF3B82F6))
-        )
+fun ProSettingActionItem(icon: ImageVector, color: Color, title: String, valueText: String? = null, textColor: Color = Color.Black, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable { onClick() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(32.dp).background(color, RoundedCornerShape(8.dp)), Alignment.Center) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
+        Spacer(Modifier.width(16.dp))
+        Text(title, Modifier.weight(1f), color = textColor)
+        if (valueText != null) Text(valueText, color = Color.Gray, fontSize = 14.sp)
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.LightGray)
     }
 }
 
 @Composable
-fun ProSettingActionItem(
-    icon: ImageVector,
-    iconBgColor: Color,
-    title: String,
-    valueText: String? = null,
-    textColor: Color = PrimaryTextColor,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier.size(32.dp).background(iconBgColor, RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(imageVector = icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-        }
-        Spacer(modifier = Modifier.width(16.dp))
-        Text(text = title, fontSize = 16.sp, color = textColor, modifier = Modifier.weight(1f))
-        if (valueText != null) {
-            Text(text = valueText, color = SecondaryTextColor, fontSize = 14.sp)
-            Spacer(modifier = Modifier.width(8.dp))
-        }
-        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.Gray.copy(0.5f))
+fun ProSettingSwitchItem(icon: ImageVector, color: Color, title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(32.dp).background(color, RoundedCornerShape(8.dp)), Alignment.Center) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
+        Spacer(Modifier.width(16.dp))
+        Text(title, Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
