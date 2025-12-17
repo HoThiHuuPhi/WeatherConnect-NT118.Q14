@@ -35,11 +35,14 @@ import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RescueMapScreen(onBack: () -> Unit) {
+fun RescueMapScreen(
+    onBack: () -> Unit,
+    onOpenList: () -> Unit
+) {
     val context = LocalContext.current
     var sosList by remember { mutableStateOf<List<SOSRequest>>(emptyList()) }
 
-    // 1) Listen SOS realtime
+    // 1) Lắng nghe SOS realtime
     DisposableEffect(Unit) {
         val listener = Firebase.firestore.collection("sos_requests")
             .addSnapshotListener { snapshot, e ->
@@ -93,7 +96,7 @@ fun RescueMapScreen(onBack: () -> Unit) {
         }
     }
 
-    // 4) Update Markers
+    // 4) Cập nhật Markers
     LaunchedEffect(sosList) {
         sosOverlay.items.clear()
         sosList.forEach { sos ->
@@ -167,7 +170,7 @@ fun RescueMapScreen(onBack: () -> Unit) {
                 }
             }
 
-            // 👇 CỤM NÚT ZOOM (MỚI THÊM VÀO) 👇
+            // CỤM NÚT ZOOM (MỚI THÊM VÀO)
             Column(
                 modifier = Modifier
                     .align(Alignment.CenterEnd) // Căn giữa bên phải
@@ -193,16 +196,15 @@ fun RescueMapScreen(onBack: () -> Unit) {
                 }
             }
 
-            // Nút quay lại danh sách (Giữ nguyên)
             FloatingActionButton(
-                onClick = onBack,
+                onClick = onOpenList,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp),
                 containerColor = Color.White,
                 contentColor = Color.Black
             ) {
-                Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Danh sách")
+                Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Xem danh sách")
             }
         }
     }

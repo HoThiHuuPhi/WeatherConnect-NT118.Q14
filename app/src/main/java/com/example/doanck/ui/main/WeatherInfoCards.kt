@@ -1278,9 +1278,6 @@ private fun CloudLayerRow(label: String, value: Double?) {
         )
     }
 }
-
-
-// SOIL MOISTURE CARD (ĐỘ ẨM ĐẤT)
 private enum class SoilLevel { DRY, OK, WET, FLOOD }
 private data class SoilUi(
     val level: SoilLevel,
@@ -1436,9 +1433,6 @@ private fun SoilMoistureCard(
         SoilLayerBar("3–9 cm", l3_9)
     }
 }
-
-
-// DEW POINT CARD (ĐIỂM SƯƠNG)
 @Composable
 private fun DewPointCard(dew: Double?, actual: Int, modifier: Modifier) {
     FrostedCard(modifier) {
@@ -1546,8 +1540,6 @@ private fun DewPointCard(dew: Double?, actual: Int, modifier: Modifier) {
         )
     }
 }
-
-// SUNSHINE DURATION CARD (THỜI GIAN NẮNG)
 @Composable
 fun SunshineDurationCard(
     durationSeconds: Double?,

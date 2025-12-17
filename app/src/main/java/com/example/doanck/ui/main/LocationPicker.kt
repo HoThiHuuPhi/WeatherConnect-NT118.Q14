@@ -49,10 +49,10 @@ fun LocationPicker(
     var addressPreview by remember { mutableStateOf("Đang xác định vị trí...") }
     var addressJob by remember { mutableStateOf<Job?>(null) }
 
-    // 👇 STATE MỚI CHO THANH TÌM KIẾM
+    // STATE MỚI CHO THANH TÌM KIẾM
     var searchText by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
-    // 👆 STATE MỚI CHO THANH TÌM KIẾM
+    // STATE MỚI CHO THANH TÌM KIẾM
 
     // Hàm lấy địa chỉ từ tọa độ
     fun getAddress(lat: Double, lon: Double) {
@@ -79,7 +79,7 @@ fun LocationPicker(
         }
     }
 
-    // 👇 HÀM MỚI TÌM VỊ TRÍ THEO TÊN VÀ DI CHUYỂN MAP
+    // HÀM MỚI TÌM VỊ TRÍ THEO TÊN VÀ DI CHUYỂN MAP
     fun searchMap(query: String) {
         if (query.isBlank()) {
             Toast.makeText(context, "Vui lòng nhập tên địa điểm.", Toast.LENGTH_SHORT).show()
@@ -122,7 +122,7 @@ fun LocationPicker(
             }
         }
     }
-    // 👆 HÀM MỚI TÌM VỊ TRÍ THEO TÊN VÀ DI CHUYỂN MAP
+    // HÀM MỚI TÌM VỊ TRÍ THEO TÊN VÀ DI CHUYỂN MAP
 
 
     LaunchedEffect(Unit) {

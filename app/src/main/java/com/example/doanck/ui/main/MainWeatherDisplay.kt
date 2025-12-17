@@ -14,7 +14,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.doanck.ui.theme.SFProDisplay
 
-// --- KHAI BÁO CLASS DỮ LIỆU (Để sửa lỗi Unresolved reference 'CurrentDisplayData') ---
 data class CurrentDisplayData(
     val cityName: String,
     val currentTemp: Int,
@@ -24,7 +23,6 @@ data class CurrentDisplayData(
     val isDay: Boolean
 )
 
-// --- KHAI BÁO STYLE CHỮ (Để sửa lỗi Unresolved reference 'SoftShadowTextStyle') ---
 private val SoftShadowTextStyle = TextStyle(
     shadow = Shadow(
         color = Color.Black.copy(alpha = 0.8f),
@@ -36,7 +34,7 @@ private val SoftShadowTextStyle = TextStyle(
 @Composable
 fun MainWeatherDisplay(
     data: CurrentDisplayData,
-    unit: String // Tham số đơn vị (C hoặc F)
+    unit: String
 ) {
     Column(
         modifier = Modifier

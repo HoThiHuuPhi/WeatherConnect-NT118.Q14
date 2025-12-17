@@ -45,21 +45,36 @@ fun AppNav(
         navController = navController,
         startDestination = startDestination
     ) {
-        // --- AUTH ---
+        // ============================================
+        // AUTH
+        // ============================================
         composable("login") {
             LoginScreen(
                 appDataStore = appDataStore,
-                onLoginSuccess = { navController.navigate("main") { popUpTo("login") { inclusive = true } } },
+                onLoginSuccess = {
+                    navController.navigate("main") {
+                        popUpTo("login") { inclusive = true }
+                    }
+                },
                 onNavigateToRegister = { navController.navigate("register") },
                 onNavigateToForgotPassword = { navController.navigate("forgot_password") }
             )
         }
-        composable("register") {
-            RegisterScreen(onRegisterSuccess = { navController.popBackStack() }, onBackToLogin = { navController.popBackStack() })
-        }
-        composable("forgot_password") { ForgotPasswordScreen(onBack = { navController.popBackStack() }) }
 
-        // --- MÀN HÌNH CHÍNH ---
+        composable("register") {
+            RegisterScreen(
+                onRegisterSuccess = { navController.popBackStack() },
+                onBackToLogin = { navController.popBackStack() }
+            )
+        }
+
+        composable("forgot_password") {
+            ForgotPasswordScreen(onBack = { navController.popBackStack() })
+        }
+
+        // ============================================
+        // MÀN HÌNH CHÍNH
+        // ============================================
         composable("main") {
             MainScreen(
                 onOpenCommunityChat = { navController.navigate("chat") },
@@ -67,63 +82,71 @@ fun AppNav(
                 onOpenSearch = { navController.navigate("search") },
                 onOpenWeatherMap = { navController.navigate("weather_map") },
 
-                // Nút mở Dialog danh sách SOS (nếu logic MainScreen dùng Dialog thì dòng này có thể thừa hoặc thiếu tùy logic, nhưng cứ giữ nguyên)
-                onOpenRescueMap = { navController.navigate("rescue_list") },
+                // NÚT "BẢN ĐỒ CỨU TRỢ" → MỞ BẢN ĐỒ TỔNG QUAN
+                onOpenRescueMap = { navController.navigate("rescue_map_overview") },
 
-                // 🔴 KHẮC PHỤC LỖI TẠI ĐÂY: Thêm logic điều hướng cho SOS Map (1 người)
-                onNavigateToSOSMap = { lat, lon, name ->
-                    val safeName = if (name.isNotBlank()) name else "SOS"
-                    val cleanName = safeName.replace("/", "-")
-                    navController.navigate("sos_map/$lat/$lon/$cleanName")
-                },
-
-                // 🟢 QUAN TRỌNG: Thêm dòng này để nút "Map Overview" trong Dialog hoạt động
-                onOpenRescueOverview = {
-                    navController.navigate("rescue_map_overview")
+                onOpenRescueList = { navController.navigate("rescue_list")
                 }
             )
         }
 
-        // --- TÍNH NĂNG KHÁC ---
+        // ============================================
+        // CÁC TÍNH NĂNG KHÁC
+        // ============================================
         composable("settings") {
             SettingsScreen(
                 appDataStore = appDataStore,
                 onBack = { navController.popBackStack() },
                 onLogout = {
                     auth.signOut()
-                    navController.navigate("login") { popUpTo("main") { inclusive = true } }
+                    navController.navigate("login") {
+                        popUpTo("main") { inclusive = true }
+                    }
                 }
             )
         }
-        composable("chat") { CommunityChatScreen(onBack = { navController.popBackStack() }) }
-        composable("search") { SearchScreen(onBack = { navController.popBackStack() }) }
-        composable("weather_map") { WeatherMapScreen(onBack = { navController.popBackStack() }) }
 
-        // --- HỆ THỐNG CỨU TRỢ ---
+        composable("chat") {
+            CommunityChatScreen(onBack = { navController.popBackStack() })
+        }
 
-        // 1. Danh sách SOS
+        composable("search") {
+            SearchScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable("weather_map") {
+            WeatherMapScreen(onBack = { navController.popBackStack() })
+        }
+
+        // ============================================
+        // HỆ THỐNG CỨU TRỢ (3 ROUTES)
+        // ============================================
+
+        // 1. BẢN ĐỒ TỔNG QUAN - Hiển thị tất cả các ca SOS
+        composable("rescue_map_overview") {
+            RescueMapScreen(
+                onBack = { navController.popBackStack() }, // Quay về MainScreen
+                onOpenList = { navController.navigate("rescue_list") } // Mở danh sách
+            )
+        }
+
+        // 2. DANH SÁCH CÁC CA CỨU HỘ
         composable("rescue_list") {
             SOSMonitorScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.popBackStack() }, // Quay về Bản đồ
                 onNavigateToMap = { lat, lon, name ->
                     val safeName = if (name.isNotBlank()) name else "SOS"
                     val cleanName = safeName.replace("/", "-")
                     navController.navigate("sos_map/$lat/$lon/$cleanName")
                 },
+                // NÚT "XEM BẢN ĐỒ" → QUAY VỀ BẢN ĐỒ TỔNG QUAN
                 onOpenMapOverview = {
-                    navController.navigate("rescue_map_overview")
+                    navController.popBackStack() // Quay về rescue_map_overview
                 }
             )
         }
 
-        // 2. Bản đồ tổng quan (Map chứa tất cả chấm đỏ)
-        composable("rescue_map_overview") {
-            RescueMapScreen(
-                onBack = { navController.popBackStack() }
-            )
-        }
-
-        // 3. Bản đồ chi tiết (Chỉ đường cho 1 người)
+        // 3. BẢN ĐỒ CHI TIẾT - Chỉ đường cho 1 người cụ thể
         composable(
             route = "sos_map/{lat}/{lon}/{name}",
             arguments = listOf(

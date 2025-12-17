@@ -33,7 +33,7 @@ fun PreviewLoginScreen() {
     val appDataStore = remember { AppDataStore(context.applicationContext) }
 
     LoginScreen(
-        appDataStore = appDataStore,      // ✅ THÊM DÒNG NÀY
+        appDataStore = appDataStore,
         onLoginSuccess = {},
         onNavigateToRegister = {},
         onNavigateToForgotPassword = {}

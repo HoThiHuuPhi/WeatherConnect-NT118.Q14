@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EditLocation
 import androidx.compose.material.icons.filled.Home
@@ -22,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -44,7 +46,8 @@ fun SOSDialog(
     networkMonitor: NetworkMonitor,
     lat: Double,
     lon: Double,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onNavigateToRescueList: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -55,11 +58,13 @@ fun SOSDialog(
 
     var isReportForOthers by remember { mutableStateOf(false) }
 
-    // Biến lưu vị trí đã chọn
     var selectedLat by remember { mutableDoubleStateOf(lat) }
     var selectedLon by remember { mutableDoubleStateOf(lon) }
     var addressInput by remember { mutableStateOf("") }
     var showMapPicker by remember { mutableStateOf(false) }
+
+    // THÊM STATE ĐỂ HIỂN THỊ DIALOG THÀNH CÔNG
+    var showSuccessDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(isReportForOthers) {
         if (!isReportForOthers) {
@@ -72,7 +77,6 @@ fun SOSDialog(
     if (showMapPicker) {
         Dialog(
             onDismissRequest = { showMapPicker = false },
-            // 👇 Dùng DialogProperties để Map chiếm toàn màn hình
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             LocationPicker(
@@ -87,6 +91,19 @@ fun SOSDialog(
                 onDismiss = { showMapPicker = false }
             )
         }
+    } else if (showSuccessDialog) {
+        // DIALOG THÀNH CÔNG
+        SuccessDialog(
+            onViewRescueList = {
+                showSuccessDialog = false
+                onDismiss()
+                onNavigateToRescueList()
+            },
+            onDismiss = {
+                showSuccessDialog = false
+                onDismiss()
+            }
+        )
     } else {
         Dialog(onDismissRequest = { if (!isSending) onDismiss() }) {
             Card(
@@ -208,15 +225,22 @@ fun SOSDialog(
                                     if (networkMonitor.isOnline()) {
                                         Firebase.firestore.collection("sos_requests").add(sos)
                                             .addOnSuccessListener {
-                                                Toast.makeText(context, "Đã gửi!", Toast.LENGTH_SHORT).show(); onDismiss()
+                                                isSending = false
+                                                showSuccessDialog = true // HIỂN THỊ DIALOG THÀNH CÔNG
                                             }
                                             .addOnFailureListener {
-                                                scope.launch { appDataStore.addToQueue(sos) }
-                                                Toast.makeText(context, "Lỗi mạng, đã lưu offline", Toast.LENGTH_SHORT).show(); onDismiss()
+                                                scope.launch {
+                                                    appDataStore.addToQueue(sos)
+                                                    isSending = false
+                                                    Toast.makeText(context, "Lỗi mạng, đã lưu offline", Toast.LENGTH_SHORT).show()
+                                                    onDismiss()
+                                                }
                                             }
                                     } else {
                                         appDataStore.addToQueue(sos)
-                                        Toast.makeText(context, "Đã lưu offline", Toast.LENGTH_SHORT).show(); onDismiss()
+                                        isSending = false
+                                        Toast.makeText(context, "Đã lưu offline", Toast.LENGTH_SHORT).show()
+                                        onDismiss()
                                     }
                                 }
                             },
@@ -227,6 +251,92 @@ fun SOSDialog(
                             if (isSending) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White) else Text("GỬI NGAY")
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SuccessDialog(
+    onViewRescueList: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Icon thành công
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .background(Color(0xFFE8F5E9), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                Text(
+                    text = "Gửi Thành Công!",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2E7D32)
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    text = "Tín hiệu cứu trợ của bạn đã được gửi đi.\nXin hãy giữ bình tĩnh.",
+                    fontSize = 14.sp,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 20.sp
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                // Nút "Xem danh sách cứu hộ"
+                Button(
+                    onClick = onViewRescueList,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF4CAF50)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "Xem Danh Sách Cứu Hộ",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // Nút "Đóng"
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "Đóng",
+                        fontSize = 16.sp,
+                        color = Color(0xFF2E7D32)
+                    )
                 }
             }
         }

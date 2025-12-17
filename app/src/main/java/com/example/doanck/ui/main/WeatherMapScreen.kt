@@ -26,7 +26,7 @@ fun WeatherMapScreen(onBack: () -> Unit) {
     var isLoading by remember { mutableStateOf(true) }
     var hasError by remember { mutableStateOf(false) }
 
-    // ✅ DÙNG VENTUSKY: Nhẹ hơn, ít lỗi xám màn hình hơn Windy
+    // DÙNG VENTUSKY: Nhẹ hơn, ít lỗi xám màn hình hơn Windy
     // l=temperature-2m: Lớp nhiệt độ (màu sắc đẹp)
     // l=rain-3h: Lớp mưa
     // p=16.0;106.0;5: Tọa độ Việt Nam, Zoom 5
@@ -67,11 +67,11 @@ fun WeatherMapScreen(onBack: () -> Unit) {
                                 builtInZoomControls = false
                                 displayZoomControls = false
 
-                                // ✅ QUAN TRỌNG: Cho phép tải nội dung hỗn hợp (tránh lỗi xám xịt do thiếu ảnh)
+                                // QUAN TRỌNG: Cho phép tải nội dung hỗn hợp (tránh lỗi xám xịt do thiếu ảnh)
                                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                             }
 
-                            // ✅ Bắt buộc dùng Hardware Acceleration cho bản đồ
+                            // Bắt buộc dùng Hardware Acceleration cho bản đồ
                             setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
 
                             webViewClient = object : WebViewClient() {

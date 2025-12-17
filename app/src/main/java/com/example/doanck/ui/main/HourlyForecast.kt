@@ -67,7 +67,7 @@ fun HourlyForecastSection(
 }
 
 @Composable
-fun HourlyItem(item: HourlyDisplayItem, unit: String) { // <--- NHẬN UNIT
+fun HourlyItem(item: HourlyDisplayItem, unit: String) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)

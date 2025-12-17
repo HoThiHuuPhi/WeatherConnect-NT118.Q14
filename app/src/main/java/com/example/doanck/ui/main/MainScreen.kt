@@ -24,12 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import com.example.doanck.data.api.RetrofitClient
 import com.example.doanck.data.datastore.AppDataStore
@@ -37,11 +34,7 @@ import com.example.doanck.data.model.CurrentWeather
 import com.example.doanck.data.model.DailyUnits
 import com.example.doanck.data.model.HourlyUnits
 import com.example.doanck.ui.DynamicWeatherBackground
-import com.example.doanck.ui.main.WeatherCardsSection
 import com.example.doanck.utils.*
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
-import kotlinx.coroutines.launch
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -62,11 +55,9 @@ fun MainScreen(
     onOpenSearch: () -> Unit = {},
     onOpenWeatherMap: () -> Unit = {},
     onOpenRescueMap: () -> Unit = {},
-    onNavigateToSOSMap: (Double, Double, String) -> Unit = { _, _, _ -> },
-    onOpenRescueOverview: () -> Unit = {}
+    onOpenRescueList: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val dataStore = remember { AppDataStore(context) }
     val networkMonitor = remember { NetworkMonitor(context) }
 
@@ -81,19 +72,12 @@ fun MainScreen(
     var currentBackgroundData by remember { mutableStateOf(WeatherBackground(WeatherEffectType.CLOUDY, 0xFFB0E0E6, 0xFFFFFACD)) }
     var locationData by remember { mutableStateOf<LocationData?>(null) }
     var showSOSDialog by remember { mutableStateOf(false) }
-    var showRescueMonitor by remember { mutableStateOf(false) }
-    var isFlushingQueue by remember { mutableStateOf(false) }
 
-    LaunchedEffect(isOnline, sosQueue) {
-        if (isOnline && sosQueue.isNotEmpty() && !isFlushingQueue) {
-            isFlushingQueue = true
-            val batch = Firebase.firestore.batch()
-            sosQueue.forEach { sos -> batch.set(Firebase.firestore.collection("sos_requests").document(), sos) }
-            batch.commit().addOnSuccessListener {
-                scope.launch { dataStore.clearQueue(); Toast.makeText(context, "✅ Đã gửi ${sosQueue.size} SOS tồn đọng.", Toast.LENGTH_LONG).show() }
-            }.addOnCompleteListener { isFlushingQueue = false }
-        }
-    }
+    var showClothingDialog by remember { mutableStateOf(false) }
+
+    var currentWeatherData by remember { mutableStateOf<CurrentWeather?>(null) }
+    var dailyWeatherData by remember { mutableStateOf<DailyUnits?>(null) }
+    var currentTempC by remember { mutableIntStateOf(0) }
 
     var permissionGranted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permissionGranted = it }
@@ -135,7 +119,12 @@ fun MainScreen(
                             tempUnit = tempUnit,
                             onBackgroundChange = { bg -> currentBackgroundData = bg },
                             onContentReady = { isWeatherReady = true },
-                            onDayClick = { day -> selectedDay = day; showDetailSheet = true }
+                            onDayClick = { day -> selectedDay = day; showDetailSheet = true },
+                            onWeatherDataLoaded = { current, daily, temp ->
+                                currentWeatherData = current
+                                dailyWeatherData = daily
+                                currentTempC = temp
+                            }
                         )
                     }
                 }
@@ -152,7 +141,7 @@ fun MainScreen(
                                 }
                             },
                             onOpenWeatherMap = onOpenWeatherMap,
-                            onOpenRescueMap = { showRescueMonitor = true }
+                            onOpenRescueMap = onOpenRescueMap
                         )
                         Spacer(Modifier.height(24.dp))
                     }
@@ -166,25 +155,65 @@ fun MainScreen(
             exit = androidx.compose.animation.scaleOut() + androidx.compose.animation.fadeOut(),
             modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 130.dp, end = 28.dp)
         ) {
-            FloatingActionButton(onClick = { showSOSDialog = true }, containerColor = Color(0xFFEF5350), contentColor = Color.White, shape = CircleShape, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.Default.Warning, contentDescription = "SOS")
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalAlignment = Alignment.End
+            ) {
+                FloatingActionButton(
+                    onClick = {
+                        if (currentWeatherData != null && dailyWeatherData != null) {
+                            showClothingDialog = true
+                        } else {
+                            Toast.makeText(context, "Đang tải dữ liệu thời tiết...", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    containerColor = Color(0xFF667EEA),
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Text("👔", fontSize = 24.sp)
+                }
+
+                // NÚT SOS
+                FloatingActionButton(
+                    onClick = { showSOSDialog = true },
+                    containerColor = Color(0xFFEF5350),
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Icon(Icons.Default.Warning, contentDescription = "SOS")
+                }
             }
         }
 
+        // DIALOG SOS
         if (showSOSDialog && locationData != null) {
-            SOSDialog(dataStore, networkMonitor, locationData!!.lat, locationData!!.lon, { showSOSDialog = false })
+            SOSDialog(
+                dataStore,
+                networkMonitor,
+                locationData!!.lat,
+                locationData!!.lon,
+                onDismiss = { showSOSDialog = false },
+                onNavigateToRescueList = { onOpenRescueList() }
+            )
         }
 
-        if (showRescueMonitor) {
-            Dialog(onDismissRequest = { showRescueMonitor = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-                SOSMonitorScreen(
-                    onBack = { showRescueMonitor = false },
-                    onNavigateToMap = { lat, lon, name -> showRescueMonitor = false; onNavigateToSOSMap(lat, lon, name) },
-                    onOpenMapOverview = { showRescueMonitor = false; onOpenRescueOverview() }
-                )
-            }
+        // DIALOG TƯ VẤN QUẦN ÁO (AI VERSION)
+        if (showClothingDialog && currentWeatherData != null && dailyWeatherData != null) {
+            AIClothingAdvisorDialog(
+                currentWeather = currentWeatherData!!,
+                tempC = currentTempC,
+                weatherDesc = WeatherUtils.getDescriptionByCode(currentWeatherData!!.weatherCode),
+                uvIndex = dailyWeatherData!!.uvIndexMax?.firstOrNull()?.toDouble(),
+                windSpeedKmh = currentWeatherData!!.windSpeed10m,
+                rainMm = currentWeatherData!!.rain ?: currentWeatherData!!.precipitation,
+                onDismiss = { showClothingDialog = false }
+            )
         }
 
+        // DETAIL SHEET
         if (showDetailSheet && selectedDay != null) {
             WeatherDetailBottomSheet(day = selectedDay!!, unit = tempUnit, onDismiss = { showDetailSheet = false })
         }
@@ -212,7 +241,8 @@ fun WeatherContentV2(
     tempUnit: String,
     onBackgroundChange: (WeatherBackground) -> Unit,
     onContentReady: () -> Unit,
-    onDayClick: (DailyDisplayItem) -> Unit
+    onDayClick: (DailyDisplayItem) -> Unit,
+    onWeatherDataLoaded: (CurrentWeather, DailyUnits, Int) -> Unit = { _, _, _ -> }
 ) {
     var weatherData by remember { mutableStateOf<WeatherUIData?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -220,12 +250,9 @@ fun WeatherContentV2(
 
     var rawCurrent by remember { mutableStateOf<CurrentWeather?>(null) }
     var rawDaily by remember { mutableStateOf<DailyUnits?>(null) }
-
     var rawHourly by remember { mutableStateOf<HourlyUnits?>(null) }
     var currentStartIndex by remember { mutableIntStateOf(0) }
-
     var elevationM by remember { mutableStateOf<Double?>(null) }
-
 
     fun convertTemp(c: Double): Int = if (tempUnit == "F") (c * 1.8 + 32).roundToInt() else c.roundToInt()
 
@@ -242,9 +269,14 @@ fun WeatherContentV2(
             rawCurrent = current
             rawDaily = daily
 
+            val tempC = convertTemp(current.temperature)
+
+            // GỌI CALLBACK ĐỂ TRUYỀN DỮ LIỆU RA NGOÀI
+            onWeatherDataLoaded(current, daily, tempC)
+
             val currentDisplay = CurrentDisplayData(
                 cityName,
-                convertTemp(current.temperature),
+                tempC,
                 WeatherUtils.getDescriptionByCode(current.weatherCode),
                 convertTemp(daily.maxTemperatures.first()),
                 convertTemp(daily.minTemperatures.first()),
@@ -304,18 +336,18 @@ fun WeatherContentV2(
                     humidityMean = daily.humidityMean?.getOrNull(index)?.roundToInt(),
                     windSpeedMax = daily.windSpeedMax?.getOrNull(index)?.roundToInt()
                 ))
-
-                val summary = WeatherUtils.generateSummaryText(hourly.weatherCodes, hourly.windGusts)
-
-                onBackgroundChange(WeatherUtils.getBackgroundData(current.weatherCode, isDay))
-                weatherData = WeatherUIData(currentDisplay, hourlyList, dailyItems, summary)
             }
 
             val summary = WeatherUtils.generateSummaryText(hourly.weatherCodes, hourly.windGusts)
             onBackgroundChange(WeatherUtils.getBackgroundData(current.weatherCode, isDay))
             weatherData = WeatherUIData(currentDisplay, hourlyList, dailyItems, summary)
 
-        } catch (e: Exception) { errorText = "Lỗi: ${e.message}" } finally { isLoading = false; onContentReady() }
+        } catch (e: Exception) {
+            errorText = "Lỗi: ${e.message}"
+        } finally {
+            isLoading = false
+            onContentReady()
+        }
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -351,21 +383,17 @@ fun WeatherContentV2(
                         rainSumMm = d.rainSums?.firstOrNull() ?: d.rainSum?.firstOrNull(),
                         snowfallMm = d.snowfallSum?.firstOrNull() ?: c.snowfall,
                         humidityPercent = c.humidity ?: d.humidityMean?.firstOrNull(),
-
                         pressureHPa = c.pressure,
                         pressureMslHPa = c.pressureMsl,
                         elevationM = elevationM,
-
                         cape = h.cape?.getOrNull(currentStartIndex),
                         cloudCover = c.cloudCover,
                         cloudLow = h.cloudCoverLow?.getOrNull(currentStartIndex),
                         cloudMid = h.cloudCoverMid?.getOrNull(currentStartIndex),
                         cloudHigh = h.cloudCoverHigh?.getOrNull(currentStartIndex),
-
                         soilMoisture0_1 = h.soilMoisture0to1?.getOrNull(currentStartIndex),
                         soilMoisture1_3 = h.soilMoisture3to9?.getOrNull(currentStartIndex),
                         soilMoisture3_9 = h.soilMoisture9to27?.getOrNull(currentStartIndex),
-
                         dewPoint = c.dewPoint2m,
                         sunshineDurationSeconds = d.sunshineDuration?.firstOrNull()
                     )

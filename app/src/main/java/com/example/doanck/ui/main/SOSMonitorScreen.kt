@@ -31,7 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.doanck.data.model.SOSRequest
-import com.google.firebase.auth.FirebaseAuth // ✅ THÊM IMPORT NÀY
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -39,7 +39,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// Hàm xóa dấu
 fun removeAccents(str: String): String {
     try {
         val temp = java.text.Normalizer.normalize(str, java.text.Normalizer.Form.NFD)
@@ -201,7 +200,6 @@ fun SOSMonitorScreen(
     }
 }
 
-// 🟢 ĐÃ CẬP NHẬT: Thêm nút "XÓA TIN" cho chính chủ
 @Composable
 fun SOSCardItemNew(
     sos: SOSRequest,

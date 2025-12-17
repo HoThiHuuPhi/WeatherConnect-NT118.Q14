@@ -120,7 +120,7 @@ fun SearchScreen(onBack: () -> Unit) {
                             colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent, cursorColor = OrangeHot, focusedTextColor = OrangeHot, unfocusedTextColor = Color.White),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { performSearch(searchText); keyboardController?.hide() })
                         )
-                        if (isSearching) CircularProgressIndicator(Modifier.size(20.dp).padding(end = 12.dp), strokeWidth = 2.dp, color = OrangeHot)
+                        if (isSearching) CircularProgressIndicator(Modifier.size(28.dp).padding(end = 12.dp), strokeWidth = 3.dp, color = OrangeHot)
                         else IconButton(onClick = { performSearch(searchText); keyboardController?.hide() }) { Icon(Icons.Default.Search, "Search", tint = OrangeHot) }
                     }
                 }
@@ -147,7 +147,6 @@ fun SearchScreen(onBack: () -> Unit) {
         }
     }
 }
-
 
 @Composable
 fun SearchWeatherResult(

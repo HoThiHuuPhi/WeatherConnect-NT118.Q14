@@ -448,7 +448,6 @@ private fun InfoRow(title: String, content: String) {
     }
 }
 
-
 @Composable
 private fun AdvancedTemperatureChart(
     dataPoints: List<ChartPoint>,
