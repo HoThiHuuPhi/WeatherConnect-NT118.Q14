@@ -40,10 +40,9 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-// --- BẢNG MÀU: CAM & XANH DƯƠNG NHẠT ---
-val ToneCam = Color(0xFFFF7D29)       // Cam (Nút chính, Focus, Radio)
-val ToneCamNhat = Color(0xFFFFE0B2)   // Cam Nhạt (Nền Icon)
-val ToneXanhDuong = Color(0xFF38BDF8) // Xanh Dương (Nút Hủy/Đóng)
+val ToneCam = Color(0xFFFF7D29)
+val ToneCamNhat = Color(0xFFFFE0B2)
+val ToneXanhDuong = Color(0xFF38BDF8)
 
 val ModernBg = Color(0xFFF8FAFC)
 val CardBg = Color.White.copy(alpha = 0.95f)
@@ -71,7 +70,7 @@ fun SettingsScreen(
     var userProfile by remember { mutableStateOf<Map<String, Any>>(emptyMap()) }
     var isAvatarUploading by remember { mutableStateOf(false) }
 
-    // --- ĐỒNG BỘ CLOUD ---
+    // Đồng bộ cloud
     LaunchedEffect(currentUser?.uid) {
         if (currentUser != null) {
             db.collection("users").document(currentUser.uid)
@@ -104,7 +103,7 @@ fun SettingsScreen(
     val enableNotifications by appDataStore.enableNotifications.collectAsState(initial = true)
     val tempUnit by appDataStore.tempUnit.collectAsState(initial = "C")
 
-    // UI States
+    // Lưu trạng thái UI
     var showPhoneDialog by remember { mutableStateOf(false) }
     var showGenderDialog by remember { mutableStateOf(false) }
     var showChangePassDialog by remember { mutableStateOf(false) }
@@ -113,7 +112,7 @@ fun SettingsScreen(
     var showDatePickerOverlay by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(initialDisplayMode = DisplayMode.Picker)
 
-    // Inputs
+    // Dữ liệu nhập vào
     var tempPhoneInput by remember { mutableStateOf("") }
     var phoneError by remember { mutableStateOf<String?>(null) }
     var tempDobInput by remember { mutableStateOf("") }
@@ -121,7 +120,6 @@ fun SettingsScreen(
     var oldPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
 
-    // Validation Helpers
     fun isValidPhoneNumber(phone: String): Boolean = phone.matches(Regex("^0\\d{9}$"))
     fun isValidDate(dateStr: String): Boolean {
         return try {
@@ -177,7 +175,7 @@ fun SettingsScreen(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- AVATAR ---
+            // lưu ảnh đại diện
             Box(contentAlignment = Alignment.BottomEnd) {
                 Surface(
                     modifier = Modifier.size(120.dp).shadow(8.dp, CircleShape),
@@ -241,20 +239,14 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // ✅ THAY THẾ ĐOẠN NÚT LOGOUT TRONG SettingsScreen.kt
+                // Đăng xuất
 
                 Button(
                     onClick = {
                         scope.launch {
-                            // ✅ SignOut Firebase để xóa session
+                            // SignOut Firebase để xóa session
                             Firebase.auth.signOut()
-
-                            // ✅ Tuỳ chọn: Xóa SharedPreferences nếu muốn xóa luôn mật khẩu đã lưu
-                            // MySharedPreferences.clearCredentials(context)
-
-                            // Xóa DataStore (nếu bạn vẫn lưu gì đó ở đây)
                             appDataStore.clearSession()
-
                             onLogout()
                         }
                     },
@@ -274,9 +266,7 @@ fun SettingsScreen(
         }
     }
 
-    // --- CÁC DIALOG (ĐỒNG BỘ MÀU CAM & XANH DƯƠNG) ---
-
-    // 1. DIALOG NGÀY SINH
+    // dialog ngày sinh
     if (showDobEditDialog) {
         AlertDialog(
             onDismissRequest = { showDobEditDialog = false },
@@ -336,7 +326,7 @@ fun SettingsScreen(
         ) { DatePicker(state = datePickerState) }
     }
 
-    // 2. DIALOG SỐ ĐIỆN THOẠI
+    // dialog điện thoại
     if (showPhoneDialog) {
         AlertDialog(
             onDismissRequest = { showPhoneDialog = false },
@@ -372,7 +362,7 @@ fun SettingsScreen(
         )
     }
 
-    // 3. DIALOG GIỚI TÍNH
+    // dialog giới tính
     if (showGenderDialog) {
         AlertDialog(
             onDismissRequest = { showGenderDialog = false },
@@ -400,7 +390,7 @@ fun SettingsScreen(
         )
     }
 
-    // 4. DIALOG ĐỔI MẬT KHẨU
+    // dialog mật khẩu
     if (showChangePassDialog) {
         var isProcessing by remember { mutableStateOf(false) }
         DisposableEffect(Unit) { onDispose { oldPassword = ""; newPassword = "" } }
@@ -463,7 +453,7 @@ fun SettingsScreen(
         )
     }
 
-    // 5. APP INFO
+    // dialog thông tin app
     if (showAppInfoDialog) {
         AlertDialog(
             onDismissRequest = { showAppInfoDialog = false },
@@ -474,8 +464,6 @@ fun SettingsScreen(
         )
     }
 }
-
-// --- UI HELPERS ---
 @Composable
 fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column {
