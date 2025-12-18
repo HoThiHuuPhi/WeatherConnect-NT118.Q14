@@ -241,11 +241,29 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
+                // ✅ THAY THẾ ĐOẠN NÚT LOGOUT TRONG SettingsScreen.kt
+
                 Button(
-                    onClick = { scope.launch { appDataStore.clearSession(); onLogout() } },
+                    onClick = {
+                        scope.launch {
+                            // ✅ SignOut Firebase để xóa session
+                            Firebase.auth.signOut()
+
+                            // ✅ Tuỳ chọn: Xóa SharedPreferences nếu muốn xóa luôn mật khẩu đã lưu
+                            // MySharedPreferences.clearCredentials(context)
+
+                            // Xóa DataStore (nếu bạn vẫn lưu gì đó ở đây)
+                            appDataStore.clearSession()
+
+                            onLogout()
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFE4E6), contentColor = ErrorColor)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFFE4E6),
+                        contentColor = ErrorColor
+                    )
                 ) {
                     Icon(Icons.Outlined.Logout, null)
                     Spacer(Modifier.width(8.dp))

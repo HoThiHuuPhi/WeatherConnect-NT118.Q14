@@ -138,35 +138,39 @@ fun LoginScreen(
 
                             val buttonScale by animateFloatAsState(targetValue = if (loading) 0.95f else 1f, label = "btn")
 
+                            // ✅ THAY THẾ ĐOẠN CODE BUTTON LOGIN TRONG LoginScreen.kt
+
                             Button(
                                 onClick = {
-                                    if (email.isBlank() || password.isBlank()) { error = "Vui lòng nhập đầy đủ thông tin"; return@Button }
-                                    loading = true; error = null
+                                    if (email.isBlank() || password.isBlank()) {
+                                        error = "Vui lòng nhập đầy đủ thông tin"
+                                        return@Button
+                                    }
+                                    loading = true
+                                    error = null
 
                                     auth.signInWithEmailAndPassword(email.trim(), password)
                                         .addOnCompleteListener { task ->
                                             loading = false
                                             if (task.isSuccessful) {
-                                                val user = auth.currentUser
-                                                if (user != null) {
-                                                    scope.launch {
-                                                        // 1. Luôn lưu UID vào DataStore để lần sau vào thẳng Main
-                                                        appDataStore.setCurrentUser(user.uid, user.email ?: email.trim())
-
-                                                        // 2. Xử lý Checkbox Ghi nhớ:
-                                                        if (isRememberChecked) {
-                                                            // Tích -> Lưu Mật khẩu vào Prefs
-                                                            MySharedPreferences.saveCredentials(context, email.trim(), password)
-                                                        } else {
-                                                            // Không tích -> Xóa Mật khẩu khỏi Prefs
-                                                            MySharedPreferences.clearCredentials(context)
-                                                        }
-
-                                                        // 3. Vào Main
-                                                        onLoginSuccess()
+                                                scope.launch {
+                                                    // ✅ CHỈ XỬ LÝ CHECKBOX: Lưu/Xóa Email + Password
+                                                    if (isRememberChecked) {
+                                                        // Tích -> Lưu Email + Password vào SharedPreferences
+                                                        MySharedPreferences.saveCredentials(context, email.trim(), password)
+                                                    } else {
+                                                        // Không tích -> Xóa dữ liệu đã lưu
+                                                        MySharedPreferences.clearCredentials(context)
                                                     }
+
+                                                    // ✅ Firebase Auth tự động giữ session
+                                                    // KHÔNG CẦN lưu UID vào DataStore nữa
+                                                    // Vào Main
+                                                    onLoginSuccess()
                                                 }
-                                            } else { error = "Sai tài khoản hoặc mật khẩu!" }
+                                            } else {
+                                                error = "Sai tài khoản hoặc mật khẩu!"
+                                            }
                                         }
                                 },
                                 modifier = Modifier.fillMaxWidth().height(54.dp).scale(buttonScale),
@@ -174,7 +178,12 @@ fun LoginScreen(
                                 contentPadding = PaddingValues(0.dp),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
-                                Box(modifier = Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFFF59E0B), Color(0xFFFBBF24)))), contentAlignment = Alignment.Center) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Brush.horizontalGradient(listOf(Color(0xFFF59E0B), Color(0xFFFBBF24)))),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     if (loading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                                     else Text("ĐĂNG NHẬP", color = Color.White, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                                 }

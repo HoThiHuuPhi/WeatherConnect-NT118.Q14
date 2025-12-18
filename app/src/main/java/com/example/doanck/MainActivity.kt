@@ -14,6 +14,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.rememberNavController
 import com.example.doanck.data.datastore.AppDataStore
 import com.example.doanck.navigation.AppNav
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.ktx.Firebase
 import com.google.firebase.messaging.FirebaseMessaging
 
 class MainActivity : ComponentActivity() {
@@ -25,28 +27,36 @@ class MainActivity : ComponentActivity() {
             val navController = rememberNavController()
             val context = LocalContext.current
             val appDataStore = remember { AppDataStore(context) }
+            val auth = Firebase.auth
 
-            // Lấy UID từ DataStore
-            val currentUid by appDataStore.currentUid.collectAsState(initial = null)
+            // ✅ LOGIC MỚI: Kiểm tra Firebase Auth Session
+            // Nếu Firebase đang giữ session (currentUser != null) -> Vào Main
+            // Ngược lại -> Vào Login
+            val startDest = remember {
+                if (auth.currentUser != null) "main" else "login"
+            }
 
-            // --- Logic Check Session ---
-            // Nếu có UID -> Vào Main. Ngược lại -> Vào Login.
-            // Checkbox không ảnh hưởng ở đây.
-            val startDest = if (!currentUid.isNullOrBlank()) "main" else "login"
-
-            // --- Service & Permission (Code cũ) ---
+            // --- Service & Permission ---
             fun startMySOSService() {
                 val intent = Intent(context, SOSService::class.java)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
-                else context.startService(intent)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
             }
+
             val permissionLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.RequestPermission(),
-                onResult = { if (it) startMySOSService() }
+                onResult = { granted -> if (granted) startMySOSService() }
             )
+
             LaunchedEffect(Unit) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                else startMySOSService()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    startMySOSService()
+                }
                 FirebaseMessaging.getInstance().subscribeToTopic("all_users")
             }
 
