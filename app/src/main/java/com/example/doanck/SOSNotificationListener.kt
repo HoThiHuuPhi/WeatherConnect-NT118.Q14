@@ -1,4 +1,4 @@
-package com.example.doanck // ⚠️ Đổi tên package nếu của bạn khác
+package com.example.doanck
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -37,7 +37,6 @@ object SOSNotificationListener {
                         try {
                             val sos = dc.document.toObject(SOSRequest::class.java)
 
-                            // 👉 TẠO NỘI DUNG THÔNG BÁO TẠI ĐÂY
                             // Lấy dữ liệu thật: Tỉnh nào? Nhắn gì? SĐT bao nhiêu?
                             val province = sos.province ?: "Chưa xác định"
                             val message = sos.message ?: "Cần hỗ trợ gấp"

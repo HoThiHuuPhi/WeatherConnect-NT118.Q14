@@ -37,13 +37,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.doanck.data.datastore.AppDataStore
-import com.example.doanck.utils.MySharedPreferences // Import Utils
+import com.example.doanck.utils.MySharedPreferences
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
-// --- MÂY & MÀU SẮC ---
 data class CloudParticle(var x: Float, val y: Float, val speed: Float, val scale: Float, val alpha: Float)
 val LightBlueSky = Color(0xFF87CEEB)
 val LightGoldenSun = Color(0xFFFDB813)
@@ -65,7 +64,7 @@ fun LoginScreen(
     var password by remember { mutableStateOf("") }
     var isRememberChecked by remember { mutableStateOf(false) }
 
-    // ✅ TỰ ĐỘNG ĐIỀN
+    // Tự động điền
     LaunchedEffect(Unit) {
         val (savedEmail, savedPass, isChecked) = MySharedPreferences.getSavedCredentials(context)
         if (savedEmail.isNotEmpty()) {
@@ -81,7 +80,7 @@ fun LoginScreen(
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { isVisible = true }
 
-    // --- ANIMATION ---
+    // Hiệu ứng động
     val configuration = LocalConfiguration.current
     val screenWidth = with(LocalDensity.current) { configuration.screenWidthDp.dp.toPx() }
     val screenHeight = with(LocalDensity.current) { configuration.screenHeightDp.dp.toPx() }
@@ -120,7 +119,7 @@ fun LoginScreen(
 
                             Spacer(Modifier.height(8.dp))
 
-                            // ✅ CHECKBOX
+                            // Check box
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { isRememberChecked = !isRememberChecked }) {
                                     Checkbox(
@@ -138,8 +137,7 @@ fun LoginScreen(
 
                             val buttonScale by animateFloatAsState(targetValue = if (loading) 0.95f else 1f, label = "btn")
 
-                            // ✅ THAY THẾ ĐOẠN CODE BUTTON LOGIN TRONG LoginScreen.kt
-
+                            //Button login
                             Button(
                                 onClick = {
                                     if (email.isBlank() || password.isBlank()) {
@@ -154,7 +152,7 @@ fun LoginScreen(
                                             loading = false
                                             if (task.isSuccessful) {
                                                 scope.launch {
-                                                    // ✅ CHỈ XỬ LÝ CHECKBOX: Lưu/Xóa Email + Password
+                                                    // Chỉ xử lý checkbox lưu xóa email + pass
                                                     if (isRememberChecked) {
                                                         // Tích -> Lưu Email + Password vào SharedPreferences
                                                         MySharedPreferences.saveCredentials(context, email.trim(), password)
@@ -162,9 +160,7 @@ fun LoginScreen(
                                                         // Không tích -> Xóa dữ liệu đã lưu
                                                         MySharedPreferences.clearCredentials(context)
                                                     }
-
-                                                    // ✅ Firebase Auth tự động giữ session
-                                                    // KHÔNG CẦN lưu UID vào DataStore nữa
+                                                    // Firebase Auth tự động giữ session
                                                     // Vào Main
                                                     onLoginSuccess()
                                                 }
@@ -203,7 +199,6 @@ fun LoginScreen(
     }
 }
 
-// Helpers
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCloud(offset: Offset, scale: Float, alpha: Float) {
     val cloudColor = Color.White.copy(alpha = alpha); val baseRadius = 30.dp.toPx() * scale
     drawCircle(color = cloudColor, radius = baseRadius, center = offset)

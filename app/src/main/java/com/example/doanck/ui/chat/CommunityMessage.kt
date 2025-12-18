@@ -8,7 +8,6 @@ data class CommunityMessage(
     val anonymous: Boolean,
     val timestamp: Long,
     val realUserId: String? = null,
-    // Thêm 2 trường này để lưu vị trí (có thể null nếu không muốn gửi)
     val latitude: Double? = null,
     val longitude: Double? = null,
     val imageUrl: String? = null

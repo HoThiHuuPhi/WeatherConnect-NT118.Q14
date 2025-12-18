@@ -64,12 +64,10 @@ import coil.compose.AsyncImage
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.withFrameNanos
 
-// --- MÀU CHỦ ĐẠO ---
 val SkyBlueChat = Color(0xFF87CEEB)
 val ChatBubbleMe = Color(0xFFF59E0B)
 val TextDarkChat = Color(0xFF1E3A8A)
 
-// --- MÂY BAY MODEL ---
 data class CloudChat(var x: Float, val y: Float, val speed: Float, val scale: Float, val alpha: Float)
 
 @Composable
@@ -157,9 +155,7 @@ fun CommunityChatScreen(
         )
     }
 
-    // -------------------------------
-    // MÂY BAY ANIMATION
-    // -------------------------------
+    // Hiệu ứng mây bay
     val config = LocalConfiguration.current
     val screenWidth = with(LocalDensity.current) { config.screenWidthDp.dp.toPx() }
     val screenHeight = with(LocalDensity.current) { config.screenHeightDp.dp.toPx() }
@@ -192,9 +188,7 @@ fun CommunityChatScreen(
         }
     }
 
-    // -------------------------------
-    // UI CHÍNH
-    // -------------------------------
+    // UI chính
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -213,7 +207,6 @@ fun CommunityChatScreen(
 
         Scaffold(
             topBar = {
-                // AppBar kính mờ
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -318,10 +311,8 @@ fun CommunityChatScreen(
     }
 }
 
-//
-// ----------------------
-// 📌 Bottom Input Bar
-// ----------------------
+// Bottom Input Bar
+
 @Composable
 fun BottomInputBar(
     selectedImageUri: Uri?,
@@ -341,8 +332,7 @@ fun BottomInputBar(
             .background(Color.White.copy(0.7f))
             .padding(12.dp)
     ) {
-
-        // --- PREVIEW ẢNH ---
+        //Ảnh
         AnimatedVisibility(visible = selectedImageUri != null) {
             Box(
                 modifier = Modifier
@@ -369,8 +359,6 @@ fun BottomInputBar(
                 }
             }
         }
-
-        // --- Severity Chips ---
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -438,10 +426,7 @@ fun BottomInputBar(
     }
 }
 
-//
-// ----------------------
 // Bubble Chat Item
-// ----------------------
 @Composable
 fun MessageItemSunny(msg: CommunityMessage) {
 
@@ -501,7 +486,7 @@ fun MessageItemSunny(msg: CommunityMessage) {
                     Spacer(Modifier.height(4.dp))
                 }
 
-                // --- ẢNH BASE64 HIỂN THỊ ---
+                // Ảnh base64 hiển thị
                 msg.imageUrl?.let { base64 ->
                     val bitmap = remember(base64) {
                         try {
@@ -541,10 +526,7 @@ fun MessageItemSunny(msg: CommunityMessage) {
     }
 }
 
-//
-// ----------------------
 // Chip lựa chọn mức độ
-// ----------------------
 @Composable
 fun SeverityChipSunny(label: String, color: Color, selected: Boolean, onClick: () -> Unit) {
     FilterChip(
@@ -564,10 +546,8 @@ fun SeverityChipSunny(label: String, color: Color, selected: Boolean, onClick: (
     )
 }
 
-//
-// ----------------------
+
 // Mây bay
-// ----------------------
 private fun DrawScope.drawCloudChat(offset: Offset, scale: Float, alpha: Float) {
     val cloudColor = Color.White.copy(alpha = alpha)
     val r = 30.dp.toPx() * scale
@@ -577,10 +557,7 @@ private fun DrawScope.drawCloudChat(offset: Offset, scale: Float, alpha: Float) 
     drawCircle(cloudColor, r * 0.9f, Offset(offset.x + r * 0.7f, offset.y + r * 0.2f))
 }
 
-//
-// ----------------------
 // Format giờ
-// ----------------------
 fun formatTimestamp(t: Long): String {
     return SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(t))
 }

@@ -40,7 +40,6 @@ import kotlinx.coroutines.isActive
 import androidx.compose.runtime.withFrameNanos
 import kotlin.random.Random
 
-// --- HỆ THỐNG MÂY BAY ---
 data class CloudParticleReg(
     var x: Float,
     val y: Float,
@@ -49,7 +48,6 @@ data class CloudParticleReg(
     val alpha: Float
 )
 
-// Màu sắc chủ đạo cho theme sáng
 val LightBlueSkyReg = Color(0xFF87CEEB)
 val LightGoldenSunReg = Color(0xFFFDB813)
 val TextDarkBlueReg = Color(0xFF1E3A8A) // Màu chữ tối
@@ -191,7 +189,6 @@ fun RegisterScreen(
                 visible = isVisible,
                 enter = slideInVertically(initialOffsetY = { 100 }, animationSpec = tween(500, delayMillis = 300)) + fadeIn(tween(1000, delayMillis = 300))
             ) {
-                // ★ BRIGHT GLASS CARD ★ (Kính sáng)
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.4f)),

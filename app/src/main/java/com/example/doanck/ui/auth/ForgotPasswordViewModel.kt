@@ -19,15 +19,13 @@ class ForgotPasswordViewModel : ViewModel() {
         auth.sendPasswordResetEmail(email)
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
-                    // Nếu chạy vào đây thì chắc chắn lệnh đã lên server Firebase
-                    Log.d("QuenMatKhau", "✅ Firebase báo: Email đã được gửi!")
-                    Toast.makeText(context, "✅ Đã gửi! Kiểm tra hòm thư (cả Spam)", Toast.LENGTH_LONG).show()
+                    Log.d("QuenMatKhau", "Firebase báo: Email đã được gửi!")
+                    Toast.makeText(context, "Đã gửi! Kiểm tra hòm thư (cả Spam)", Toast.LENGTH_LONG).show()
                     onSuccess()
                 } else {
-                    // Nếu vào đây là lỗi code hoặc lỗi mạng
                     val errorMsg = task.exception?.message ?: "Lỗi không xác định"
-                    Log.e("QuenMatKhau", "❌ Lỗi: $errorMsg")
-                    Toast.makeText(context, "❌ Lỗi: $errorMsg", Toast.LENGTH_LONG).show()
+                    Log.e("QuenMatKhau", "Lỗi: $errorMsg")
+                    Toast.makeText(context, "Lỗi: $errorMsg", Toast.LENGTH_LONG).show()
                 }
             }
     }

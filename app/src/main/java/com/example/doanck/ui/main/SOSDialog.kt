@@ -56,7 +56,6 @@ fun SOSDialog(
     var phone by remember { mutableStateOf("") }
     var isSending by remember { mutableStateOf(false) }
 
-    // --- CÁC BIẾN LƯU LỖI (VALIDATION) ---
     var phoneError by remember { mutableStateOf<String?>(null) }
     var messageError by remember { mutableStateOf<String?>(null) }
 
@@ -67,14 +66,13 @@ fun SOSDialog(
     var addressInput by remember { mutableStateOf("") }
     var showMapPicker by remember { mutableStateOf(false) }
 
-    // THÊM STATE ĐỂ HIỂN THỊ DIALOG THÀNH CÔNG
     var showSuccessDialog by remember { mutableStateOf(false) }
 
     // Hàm kiểm tra hợp lệ
     fun validateInputs(): Boolean {
         var isValid = true
 
-        // 1. Kiểm tra SĐT: Phải 10 số, bắt đầu bằng 0, chỉ chứa số
+        // Kiểm tra SĐT: Phải 10 số, bắt đầu bằng 0, chỉ chứa số
         if (phone.isBlank()) {
             phoneError = "Vui lòng nhập số điện thoại"
             isValid = false
@@ -85,7 +83,7 @@ fun SOSDialog(
             phoneError = null
         }
 
-        // 2. Kiểm tra Tin nhắn: Không được để trống
+        // Kiểm tra Tin nhắn: Không được để trống
         if (message.isBlank()) {
             messageError = "Vui lòng nhập tình trạng khẩn cấp"
             isValid = false
@@ -122,7 +120,6 @@ fun SOSDialog(
             )
         }
     } else if (showSuccessDialog) {
-        // DIALOG THÀNH CÔNG
         SuccessDialog(
             onViewRescueList = {
                 showSuccessDialog = false
@@ -184,7 +181,7 @@ fun SOSDialog(
                         }
                     }
 
-                    // --- TRƯỜNG NHẬP SỐ ĐIỆN THOẠI (CÓ RÀNG BUỘC) ---
+                    // SDT LIÊN HỆ (CÓ RÀNG BUỘC)
                     OutlinedTextField(
                         value = phone,
                         onValueChange = {
@@ -209,7 +206,7 @@ fun SOSDialog(
 
                     Spacer(Modifier.height(8.dp))
 
-                    // --- TRƯỜNG NHẬP TIN NHẮN (CÓ RÀNG BUỘC) ---
+                    // tình trạng khẩn cấp
                     OutlinedTextField(
                         value = message,
                         onValueChange = {
@@ -293,7 +290,7 @@ fun SOSDialog(
                                         Firebase.firestore.collection("sos_requests").add(sos)
                                             .addOnSuccessListener {
                                                 isSending = false
-                                                showSuccessDialog = true // HIỂN THỊ DIALOG THÀNH CÔNG
+                                                showSuccessDialog = true
                                             }
                                             .addOnFailureListener {
                                                 scope.launch {

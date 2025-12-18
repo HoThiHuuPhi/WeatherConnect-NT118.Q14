@@ -67,46 +67,32 @@ object WeatherUtils {
     fun getWeatherIcon(code: Int, isDay: Boolean): Int {
         return when (code) {
 
-            // CLEAR SKY
             0 -> if (isDay) R.drawable.ic_day_clear else R.drawable.ic_night_clear
 
-            // MAINLY CLEAR
             1 -> if (isDay) R.drawable.ic_day_mostly_clear else R.drawable.ic_night_mostly_clear
 
-            // PARTLY CLOUDY
             2 -> if (isDay) R.drawable.ic_day_partly_cloud else R.drawable.ic_night_partly_cloud
 
-            // OVERCAST
             3 -> R.drawable.ic_overcast
 
-            // FOG
             45, 48 -> if (isDay) R.drawable.ic_fog else R.drawable.ic_fog
 
-            // DRIZZLE
             51, 53, 55 -> if (isDay) R.drawable.ic_day_drizzle else R.drawable.ic_night_drizzle
 
-            // RAIN
             61, 63, 65 -> R.drawable.ic_rain
 
-            // FREEZING RAIN / ICE
             66, 67 -> R.drawable.ic_freezing_rain
 
-            // SNOWFALL
             71, 73, 75 -> if (isDay) R.drawable.ic_day_snowfall else R.drawable.ic_snowy
 
-            // SNOW GRAINS
             77 -> R.drawable.ic_snow
 
-            // RAIN SHOWERS
             80, 81, 82 -> R.drawable.ic_rain
 
-            // SNOW SHOWERS
             85, 86 -> R.drawable.ic_snowy
 
-            // THUNDERSTORM
             95, 96, 99 -> if (isDay) R.drawable.ic_day_storm else R.drawable.ic_night_storm
 
-            // DEFAULT
             else -> R.drawable.ic_shooting_star
         }
     }
@@ -156,7 +142,6 @@ object WeatherUtils {
     fun getBackgroundData(code: Int, isDay: Boolean): WeatherBackground {
         return when (code) {
 
-            // ================= TRỜI QUANG (CLEAR) =================
             // 0: Trời quang đãng (Clear Sky)
             0 -> if (isDay) {
                 WeatherBackground(
@@ -172,7 +157,6 @@ object WeatherUtils {
                 )
             }
 
-            // ================= CÓ MÂY (CLOUDS) =================
             // 1: Ít mây (Mainly Clear) - Nhạt hơn 0 một chút
             1 -> if (isDay) {
                 WeatherBackground(
@@ -218,7 +202,6 @@ object WeatherUtils {
                 )
             }
 
-            // ================= SƯƠNG MÙ (FOG) =================
             // 45: Sương mù (Fog)
             45 -> WeatherBackground(
                 effectType = WeatherEffectType.CLOUDY,
@@ -233,7 +216,6 @@ object WeatherUtils {
                 gradientEndColor = 0xFFCFD8DC
             )
 
-            // ================= MƯA PHÙN (DRIZZLE) =================
             // 51: Mưa phùn nhẹ (Light Drizzle)
             51 -> WeatherBackground(
                 effectType = WeatherEffectType.RAIN,
@@ -255,7 +237,6 @@ object WeatherUtils {
                 gradientEndColor = 0xFF708596
             )
 
-            // ================= MƯA ĐÓNG BĂNG (FREEZING DRIZZLE) =================
             // 56: Mưa phùn băng nhẹ
             56 -> WeatherBackground(
                 effectType = WeatherEffectType.SNOW,
@@ -270,7 +251,6 @@ object WeatherUtils {
                 gradientEndColor = 0xFFBDC3C7
             )
 
-            // ================= MƯA (RAIN) =================
             // 61: Mưa nhỏ (Slight Rain) - Màu iOS Classic Rain
             61 -> WeatherBackground(
                 effectType = WeatherEffectType.RAIN,
@@ -292,7 +272,6 @@ object WeatherUtils {
                 gradientEndColor = 0xFF141E30
             )
 
-            // ================= MƯA BĂNG (FREEZING RAIN) =================
             // 66: Mưa băng nhẹ
             66 -> WeatherBackground(
                 effectType = WeatherEffectType.STORM,
@@ -307,7 +286,6 @@ object WeatherUtils {
                 gradientEndColor = 0xFF3C8090
             )
 
-            // ================= TUYẾT (SNOW) =================
             // 71: Tuyết rơi nhẹ (Slight Snow) - Xanh băng (Ice Blue)
             71 -> WeatherBackground(
                 effectType = WeatherEffectType.SNOW,
@@ -336,7 +314,6 @@ object WeatherUtils {
                 gradientEndColor = 0xFFECEFF1
             )
 
-            // ================= MƯA RÀO (SHOWERS) =================
             // 80: Mưa rào nhẹ (Slight Rain Showers)
             80 -> WeatherBackground(
                 effectType = WeatherEffectType.RAIN,
@@ -358,7 +335,6 @@ object WeatherUtils {
                 gradientEndColor = 0xFF434343
             )
 
-            // ================= TUYẾT RÀO (SNOW SHOWERS) =================
             // 85: Tuyết rào nhẹ
             85 -> WeatherBackground(
                 effectType = WeatherEffectType.SNOW,
@@ -373,7 +349,6 @@ object WeatherUtils {
                 gradientEndColor = 0xFF78909C
             )
 
-            // ================= DÔNG BÃO (THUNDERSTORM) =================
             // 95: Có sấm sét (Thunderstorm) - Tím than
             95 -> WeatherBackground(
                 effectType = WeatherEffectType.STORM,

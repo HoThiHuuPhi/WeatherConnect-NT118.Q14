@@ -29,14 +29,13 @@ class MainActivity : ComponentActivity() {
             val appDataStore = remember { AppDataStore(context) }
             val auth = Firebase.auth
 
-            // ✅ LOGIC MỚI: Kiểm tra Firebase Auth Session
             // Nếu Firebase đang giữ session (currentUser != null) -> Vào Main
             // Ngược lại -> Vào Login
             val startDest = remember {
                 if (auth.currentUser != null) "main" else "login"
             }
 
-            // --- Service & Permission ---
+            // Service & Permission
             fun startMySOSService() {
                 val intent = Intent(context, SOSService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

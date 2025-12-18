@@ -295,7 +295,7 @@ fun DynamicWeatherBackground(
             }
         }
 
-        // --- Vẽ mặt trời **sau cùng** ---
+        // Vẽ mặt trời
         if (backgroundData.effectType == WeatherEffectType.SUNNY) {
             val sunCenterX = w * 0.85f
             val sunCenterY = h * 0.15f

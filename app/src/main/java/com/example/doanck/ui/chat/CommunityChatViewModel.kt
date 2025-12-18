@@ -61,9 +61,7 @@ class CommunityChatViewModel : ViewModel() {
         if (auth.currentUser == null) auth.signInAnonymously()
     }
 
-    // ---------------------------------------------------------
     // Lấy vị trí GPS
-    // ---------------------------------------------------------
     @SuppressLint("MissingPermission")
     fun getUserLocation(context: Context) {
         val client = LocationServices.getFusedLocationProviderClient(context)
@@ -87,9 +85,7 @@ class CommunityChatViewModel : ViewModel() {
             }
     }
 
-    // ---------------------------------------------------------
     // Chuyển GPS → tên quận/huyện
-    // ---------------------------------------------------------
     private fun getAddress(context: Context, lat: Double, lng: Double) {
         viewModelScope.launch(Dispatchers.IO) {
             kotlin.runCatching {
@@ -105,9 +101,7 @@ class CommunityChatViewModel : ViewModel() {
         }
     }
 
-    // ---------------------------------------------------------
     // Lắng nghe Firestore realtime
-    // ---------------------------------------------------------
     private fun listenToMessages() {
         db.collection("messages")
             .orderBy("timestamp")
@@ -135,9 +129,7 @@ class CommunityChatViewModel : ViewModel() {
             }
     }
 
-    // ---------------------------------------------------------
     // Lọc tin nhắn trong bán kính 5km
-    // ---------------------------------------------------------
     private fun filterMessages() {
         val user = currentUserLocation ?: return
         val result = allRawMessages.filter { msg ->
@@ -153,10 +145,7 @@ class CommunityChatViewModel : ViewModel() {
         _messages.value = result
     }
 
-    // ---------------------------------------------------------
     // Gửi text + gửi ảnh
-    // ---------------------------------------------------------
-
     fun sendMessage(text: String, severity: String, anonymous: Boolean, context: Context) {
         sendMessageInternal(text, severity, anonymous, context, null)
     }
@@ -205,9 +194,7 @@ class CommunityChatViewModel : ViewModel() {
             .addOnFailureListener { Toast.makeText(context, "Lỗi mạng!", Toast.LENGTH_SHORT).show() }
     }
 
-    // ---------------------------------------------------------
     // Nén ảnh → BASE64
-    // ---------------------------------------------------------
     private fun uriToBase64(context: Context, uri: Uri): String? {
         return try {
             val input = context.contentResolver.openInputStream(uri)

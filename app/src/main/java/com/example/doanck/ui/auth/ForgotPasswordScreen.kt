@@ -36,12 +36,10 @@ import kotlinx.coroutines.isActive
 import androidx.compose.runtime.withFrameNanos
 import kotlin.random.Random
 
-// --- CẤU HÌNH MÂY CHO MÀN HÌNH NÀY ---
 data class CloudParticleForgot(
     var x: Float, val y: Float, val speed: Float, val scale: Float, val alpha: Float
 )
 
-// Màu chủ đạo (Copy từ Login sang cho đồng bộ)
 val SkyBlue = Color(0xFF87CEEB)
 val SunGold = Color(0xFFFDB813)
 val DarkBlueText = Color(0xFF1E3A8A)
@@ -60,7 +58,7 @@ fun ForgotPasswordScreen(
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { isVisible = true }
 
-    // --- SETUP ANIMATION MÂY & MẶT TRỜI ---
+    //  Hiệu ứng động cho mặt trời và mây
     val configuration = LocalConfiguration.current
     val screenWidth = with(LocalDensity.current) { configuration.screenWidthDp.dp.toPx() }
     val screenHeight = with(LocalDensity.current) { configuration.screenHeightDp.dp.toPx() }
@@ -69,7 +67,7 @@ fun ForgotPasswordScreen(
         List(6) {
             CloudParticleForgot(
                 x = Random.nextFloat() * screenWidth,
-                y = Random.nextFloat() * (screenHeight / 3), // Mây bay cao hơn chút
+                y = Random.nextFloat() * (screenHeight / 3),
                 speed = Random.nextFloat() * 1.5f + 0.5f,
                 scale = Random.nextFloat() * 0.5f + 0.8f,
                 alpha = Random.nextFloat() * 0.3f + 0.6f
@@ -128,7 +126,7 @@ fun ForgotPasswordScreen(
             }
         }
 
-        // Nút Back (Màu tối để nổi trên nền sáng)
+        // Nút Back
         IconButton(
             onClick = onBack,
             modifier = Modifier.padding(top = 40.dp, start = 16.dp).align(Alignment.TopStart)
@@ -136,18 +134,17 @@ fun ForgotPasswordScreen(
             Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = DarkBlueText)
         }
 
-        // 2. Nội dung chính
+        // Nội dung chính
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             AnimatedVisibility(visible = isVisible, enter = slideInVertically { -50 } + fadeIn()) {
-                // Icon Ổ khóa reset
                 Icon(
                     Icons.Default.LockReset, null,
                     modifier = Modifier.size(90.dp),
-                    tint = Color(0xFFF59E0B) // Màu cam nắng
+                    tint = Color(0xFFF59E0B)
                 )
             }
 
@@ -174,7 +171,6 @@ fun ForgotPasswordScreen(
 
             Spacer(Modifier.height(32.dp))
 
-            // Card nhập liệu (Kính sáng)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.4f)),
@@ -188,8 +184,6 @@ fun ForgotPasswordScreen(
                         .padding(24.dp)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-
-                        // Input Email (Style sáng)
                         OutlinedTextField(
                             value = email, onValueChange = { email = it },
                             label = { Text("Email đăng ký", color = DarkBlueText.copy(0.7f)) },
@@ -209,7 +203,6 @@ fun ForgotPasswordScreen(
 
                         Spacer(Modifier.height(24.dp))
 
-                        // Button (Gradient Vàng Cam)
                         val scale by animateFloatAsState(if (isLoading) 0.95f else 1f, label = "btn")
                         Button(
                             onClick = {
@@ -242,7 +235,6 @@ fun ForgotPasswordScreen(
     }
 }
 
-// Hàm vẽ mây (Copy để dùng riêng cho file này)
 private fun DrawScope.drawCloudForgot(offset: Offset, scale: Float, alpha: Float) {
     val cloudColor = Color.White.copy(alpha = alpha)
     val baseRadius = 30.dp.toPx() * scale

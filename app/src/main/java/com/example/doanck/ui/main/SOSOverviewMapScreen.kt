@@ -87,7 +87,7 @@ fun SOSOverviewMapScreen(
         }
     }
 
-    // 2. Lắng nghe SOS realtime từ Firebase
+    // Lắng nghe SOS realtime từ Firebase
     DisposableEffect(Unit) {
         val listener = Firebase.firestore.collection("sos_requests")
             .addSnapshotListener { snapshot, e ->
@@ -97,7 +97,7 @@ fun SOSOverviewMapScreen(
         onDispose { listener.remove() }
     }
 
-    // 3. Cập nhật markers lên bản đồ
+    // Cập nhật markers lên bản đồ
     LaunchedEffect(sosList, vietMapGL) {
         vietMapGL?.let { map ->
             map.clear() // Xóa marker cũ
@@ -112,7 +112,7 @@ fun SOSOverviewMapScreen(
         }
     }
 
-    // 4. Lifecycle observer cho MapView
+    // Lifecycle observer cho MapView
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -135,7 +135,7 @@ fun SOSOverviewMapScreen(
             modifier = Modifier
                 .fillMaxSize()
         ) {
-            // --- BẢN ĐỒ VIETMAP ---
+            // vietmap sdk
             AndroidView(
                 factory = { ctx ->
                     MapView(ctx).apply {
@@ -201,7 +201,7 @@ fun SOSOverviewMapScreen(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // --- HEADER ---
+            // thanh header
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -301,7 +301,7 @@ fun SOSOverviewMapScreen(
                 }
             }
 
-            // --- NÚT DƯỚI CÙNG (Vị trí tôi & Danh sách) ---
+            // Vị trí của tôi danh sách
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -341,7 +341,7 @@ fun SOSOverviewMapScreen(
             }
         }
 
-        // --- BOTTOM SHEET CHI TIẾT ---
+        // bottom sheet chi tiết
         if (showInfoSheet && selectedSOS != null) {
             ModalBottomSheet(
                 onDismissRequest = { showInfoSheet = false },

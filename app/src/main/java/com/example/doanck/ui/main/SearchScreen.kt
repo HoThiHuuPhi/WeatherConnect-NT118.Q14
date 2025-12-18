@@ -141,7 +141,7 @@ fun SearchScreen(onBack: () -> Unit) {
         }
 
         Column(modifier = Modifier.fillMaxSize()) {
-            // HEADER SEARCH BAR - GRADIENT ĐẸP
+            // header search bảr
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -187,7 +187,7 @@ fun SearchScreen(onBack: () -> Unit) {
 
                         Spacer(Modifier.width(8.dp))
 
-                        // TEXT FIELD
+                        // text field tìm kiếm
                         OutlinedTextField(
                             value = searchText,
                             onValueChange = {
@@ -196,7 +196,7 @@ fun SearchScreen(onBack: () -> Unit) {
                             },
                             placeholder = {
                                 Text(
-                                    "Tìm kiếm thành phố...",
+                                    "Tìm kiếm...",
                                     color = Color(0xFF1565C0).copy(0.6f),
                                     fontSize = 16.sp
                                 )
@@ -223,7 +223,7 @@ fun SearchScreen(onBack: () -> Unit) {
 
                         Spacer(Modifier.width(8.dp))
 
-                        // SEARCH BUTTON
+                        // Button tìm kiếm
                         if (isSearching) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(32.dp),

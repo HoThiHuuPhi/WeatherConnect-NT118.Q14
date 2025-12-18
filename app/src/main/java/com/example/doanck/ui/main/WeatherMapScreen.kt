@@ -39,26 +39,25 @@ fun WeatherMapScreen(onBack: () -> Unit) {
     val mapUrl = "https://www.ventusky.com/?p=16.0;106.0;5&l=temperature-2m"
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // HEADER BOX với Gradient - TRÀN LÊN STATUS BAR
         Box(
             Modifier
                 .fillMaxWidth()
                 .background(
                     brush = Brush.horizontalGradient(
                         colors = listOf(
-                            Color(0xFF4A90E2),  // Xanh dương đậm
-                            Color(0xFF50C9C3),  // Xanh ngọc
-                            Color(0xFF96E6A1)   // Xanh lá nhạt
+                            Color(0xFF4A90E2),
+                            Color(0xFF50C9C3),
+                            Color(0xFF96E6A1)
                         )
                     )
                 )
-                .statusBarsPadding()  // Padding sau background để gradient tràn lên
+                .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // NÚT BACK
+                // back
                 IconButton(onClick = onBack) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
@@ -69,7 +68,7 @@ fun WeatherMapScreen(onBack: () -> Unit) {
 
                 Spacer(Modifier.width(8.dp))
 
-                // TITLE
+                // title
                 Text(
                     "Bản đồ mật độ Thời tiết",
                     color = Color.White,
@@ -79,7 +78,7 @@ fun WeatherMapScreen(onBack: () -> Unit) {
             }
         }
 
-        // WebView content - Không bị header che nữa
+        // WebView content
         Box(
             modifier = Modifier
                 .weight(1f)

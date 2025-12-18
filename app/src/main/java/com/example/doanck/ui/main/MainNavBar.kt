@@ -53,7 +53,7 @@ fun MainTopNavBar(
     ) {
         var mapMenuExpanded by remember { mutableStateOf(false) }
 
-        // --- BUTTON BẢN ĐỒ ---
+        // Button map
         Box(
             modifier = Modifier.wrapContentSize(),
             contentAlignment = Alignment.Center
@@ -89,7 +89,7 @@ fun MainTopNavBar(
 
         Spacer(Modifier.width(12.dp))
 
-        // --- THANH TAB NAVIGATION ---
+        // Tab navigation bảr
         Box(
             modifier = Modifier
                 .weight(1f)

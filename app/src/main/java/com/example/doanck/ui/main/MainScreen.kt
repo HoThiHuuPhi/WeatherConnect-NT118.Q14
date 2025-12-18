@@ -35,8 +35,12 @@ import com.example.doanck.data.datastore.AppDataStore
 import com.example.doanck.data.model.CurrentWeather
 import com.example.doanck.data.model.DailyUnits
 import com.example.doanck.data.model.HourlyUnits
+import com.example.doanck.data.model.SOSRequest
 import com.example.doanck.ui.DynamicWeatherBackground
 import com.example.doanck.utils.*
+import com.google.firebase.Firebase
+import com.google.firebase.firestore.firestore
+import kotlinx.coroutines.launch
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -62,11 +66,43 @@ fun MainScreen(
     val context = LocalContext.current
     val dataStore = remember { AppDataStore(context) }
     val networkMonitor = remember { NetworkMonitor(context) }
+    val scope = rememberCoroutineScope()
 
     val enableAnimation by dataStore.enableAnimation.collectAsState(initial = true)
     val tempUnit by dataStore.tempUnit.collectAsState(initial = "C")
     val isOnline by networkMonitor.isOnlineFlow.collectAsState(initial = false)
     val sosQueue by dataStore.sosQueue.collectAsState(initial = emptyList())
+
+    LaunchedEffect(isOnline, sosQueue) {
+        if (isOnline && sosQueue.isNotEmpty()) {
+            val db = Firebase.firestore
+            val pendingMessages = sosQueue.toList()
+
+            pendingMessages.forEach { sosRequestString ->
+                try {
+                    // Chuyển chuỗi JSON từ DataStore về lại object SOSRequest
+                    val sosRequest = AppDataStore.sosRequestAdapter.fromJson(sosRequestString, SOSRequest::class.java)
+                    if (sosRequest != null) {
+                        db.collection("sos_requests").add(sosRequest)
+                            .addOnSuccessListener {
+                                // Gửi thành công -> Xóa tin nhắn khỏi hàng đợi
+                                scope.launch {
+                                    dataStore.removeFromQueue(sosRequestString)
+                                }
+                            }
+                            .addOnFailureListener {
+                                // Gửi thất bại, không làm gì, chờ lần sau
+                            }
+                    }
+                } catch (e: Exception) {
+                    // Lỗi parse JSON, xóa tin hỏng
+                    scope.launch {
+                        dataStore.removeFromQueue(sosRequestString)
+                    }
+                }
+            }
+        }
+    }
 
     var selectedDay by remember { mutableStateOf<DailyDisplayItem?>(null) }
     var showDetailSheet by remember { mutableStateOf(false) }
@@ -181,7 +217,7 @@ fun MainScreen(
                     )
                 }
 
-                // NÚT SOS
+                // Nút gửi tín hiệu SOS
                 FloatingActionButton(
                     onClick = { showSOSDialog = true },
                     containerColor = Color(0xFFEF5350),
@@ -194,7 +230,7 @@ fun MainScreen(
             }
         }
 
-        // DIALOG SOS
+        // Dialog SOS
         if (showSOSDialog && locationData != null) {
             SOSDialog(
                 dataStore,
@@ -218,7 +254,7 @@ fun MainScreen(
             )
         }
 
-        // DETAIL SHEET
+        // Detail sheet
         if (showDetailSheet && selectedDay != null) {
             WeatherDetailBottomSheet(day = selectedDay!!, unit = tempUnit, onDismiss = { showDetailSheet = false })
         }
@@ -276,7 +312,7 @@ fun WeatherContentV2(
 
             val tempC = convertTemp(current.temperature)
 
-            // GỌI CALLBACK ĐỂ TRUYỀN DỮ LIỆU RA NGOÀI
+            // Gọi callback để truyền dữ liệu ra ngoài
             onWeatherDataLoaded(current, daily, tempC)
 
             val currentDisplay = CurrentDisplayData(

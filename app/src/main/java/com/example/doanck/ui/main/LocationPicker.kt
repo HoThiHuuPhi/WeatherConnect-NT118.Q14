@@ -49,10 +49,9 @@ fun LocationPicker(
     var addressPreview by remember { mutableStateOf("Đang xác định vị trí...") }
     var addressJob by remember { mutableStateOf<Job?>(null) }
 
-    // STATE MỚI CHO THANH TÌM KIẾM
+    // State mới cho thanh tìm kiếm
     var searchText by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
-    // STATE MỚI CHO THANH TÌM KIẾM
 
     // Hàm lấy địa chỉ từ tọa độ
     fun getAddress(lat: Double, lon: Double) {
@@ -79,7 +78,7 @@ fun LocationPicker(
         }
     }
 
-    // HÀM MỚI TÌM VỊ TRÍ THEO TÊN VÀ DI CHUYỂN MAP
+    // Hàm mới tìm vị trí và di chuyển theo map
     fun searchMap(query: String) {
         if (query.isBlank()) {
             Toast.makeText(context, "Vui lòng nhập tên địa điểm.", Toast.LENGTH_SHORT).show()
@@ -122,8 +121,6 @@ fun LocationPicker(
             }
         }
     }
-    // HÀM MỚI TÌM VỊ TRÍ THEO TÊN VÀ DI CHUYỂN MAP
-
 
     LaunchedEffect(Unit) {
         Configuration.getInstance().userAgentValue = context.packageName
@@ -131,7 +128,7 @@ fun LocationPicker(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        // 1. BẢN ĐỒ
+        // 1. Bản đồ
         AndroidView(
             factory = { ctx ->
                 MapView(ctx).apply {
@@ -160,7 +157,7 @@ fun LocationPicker(
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. CÁI GHIM CỐ ĐỊNH Ở GIỮA
+        // 2. Pin ở center
         Icon(
             imageVector = Icons.Default.LocationOn,
             contentDescription = "Pin",
@@ -171,7 +168,7 @@ fun LocationPicker(
                 .offset(y = (-24).dp)
         )
 
-        // 3. THANH TÌM KIẾM (MỚI)
+        // 3. Thanh tìm kiếm
         Card(
             modifier = Modifier
                 .fillMaxWidth()

@@ -39,9 +39,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// =======================
-// TEXT NORMALIZE HELPERS
-// =======================
 fun removeAccents(str: String): String {
     return try {
         val temp = java.text.Normalizer.normalize(str, java.text.Normalizer.Form.NFD)
@@ -54,12 +51,6 @@ fun removeAccents(str: String): String {
 
 fun normalizeSpaces(s: String): String = s.trim().replace(Regex("\\s+"), " ")
 
-/**
- * Key để distinct/so sánh tỉnh:
- * - bỏ dấu
- * - bỏ tiền tố "Tỉnh", "Thành phố", "TP."
- * - gom về 1 chuẩn để khỏi bị lặp
- */
 fun normalizeProvinceKey(name: String): String {
     var s = normalizeSpaces(name)
 
@@ -72,11 +63,6 @@ fun normalizeProvinceKey(name: String): String {
     return removeAccents(s)
 }
 
-/**
- * Trích đúng tên tỉnh/TP từ chuỗi address có dạng:
- * "... , Dĩ An, Bình Dương, Việt Nam"
- * -> "Bình Dương"
- */
 fun extractProvince(raw: String?): String? {
     if (raw.isNullOrBlank()) return null
 
@@ -105,11 +91,9 @@ fun SOSMonitorScreen(
     var isLoading by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
 
-    // ✅ tỉnh đang chọn
     var selectedProvince by remember { mutableStateOf("Tất cả các tỉnh") }
     var expandedProvinceMenu by remember { mutableStateOf(false) }
 
-    // Realtime
     DisposableEffect(Unit) {
         val query = Firebase.firestore.collection("sos_requests")
             .orderBy("timestamp", Query.Direction.DESCENDING)
@@ -124,20 +108,19 @@ fun SOSMonitorScreen(
         onDispose { listener.remove() }
     }
 
-    // ✅ Danh sách tỉnh/TP: lấy từ extractProvince + distinct theo key chuẩn hoá
     val provinceList = remember(sosList) {
         val provincesRaw = sosList.mapNotNull { extractProvince(it.province) }
             .filter { it.isNotBlank() }
 
         val provinces = provincesRaw
-            .sortedBy { it.length } // ưu tiên chuỗi ngắn (vd "Bình Dương")
-            .distinctBy { normalizeProvinceKey(it) } // ✅ chống lặp triệt để
+            .sortedBy { it.length }
+            .distinctBy { normalizeProvinceKey(it) }
             .sortedBy { normalizeProvinceKey(it) }
 
         listOf("Tất cả các tỉnh") + provinces
     }
 
-    // ✅ Lọc list
+    // lọc lists
     val filteredList = sosList.filter { sos ->
         val matchSearch = if (searchQuery.isBlank()) true else {
             val q = removeAccents(searchQuery.trim())
@@ -173,7 +156,7 @@ fun SOSMonitorScreen(
                 )
 
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    // Search
+                    // Tìm kiếm
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
@@ -367,7 +350,7 @@ fun SOSCardItemNew(
             InfoRow(icon = Icons.Default.Call, text = sos.phone, isBold = true)
             Spacer(Modifier.height(16.dp))
 
-            // NÚT "TÔI ĐÃ AN TOÀN" (Chỉ hiện nếu là chính chủ)
+            // Nút "Đã an toàn (Xóa tin)" chỉ hiện với user
             if (isMySOS) {
                 Button(
                     onClick = {
@@ -383,7 +366,7 @@ fun SOSCardItemNew(
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
                 ) {
-                    Text("TÔI ĐÃ ĐƯỢC CỨU (XÓA TIN)")
+                    Text("ĐÃ AN TOÀN (XÓA TIN)")
                 }
                 Spacer(Modifier.height(8.dp))
             }

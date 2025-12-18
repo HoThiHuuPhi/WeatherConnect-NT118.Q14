@@ -3,7 +3,6 @@ package com.example.doanck.data.model
 import com.google.firebase.firestore.DocumentId
 
 data class SOSRequest(
-    // 👇 ĐỔI TÊN THÀNH docId ĐỂ TRÁNH XUNG ĐỘT
     @DocumentId
     val docId: String = "",
 

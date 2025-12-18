@@ -87,7 +87,7 @@ Chỉ trả về JSON (không markdown, không backticks), dạng:
 
 **Quy tắc:**
 - 8–12 lời khuyên
-- Mỗi advice tối đa ~70 ký tự, dễ hiểu, đúng kiểu người Việt nói
+- Mỗi advice tối đa ~70 ký tự, dễ hiểu, đúng kiểu người Việt nói, thân thiện, dí dỏm và có ích dựa trên thời tiết 
 - Mỗi reason dưới 20 từ
 - Mỗi lời khuyên phải có emoji phù hợp (mưa/UV/nắng/gió/lạnh/nóng/trơn trượt/đủ nước…)
 - Không thêm chữ nào ngoài JSON
@@ -102,7 +102,6 @@ Chỉ trả về JSON (không markdown, không backticks), dạng:
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "application/json")
             conn.setRequestProperty("anthropic-version", "2023-06-01")
-            // API key sẽ được thêm tự động bởi hệ thống của bạn (nếu bạn có cơ chế inject)
             conn.doOutput = true
 
             val requestBody = JSONObject().apply {
@@ -161,7 +160,7 @@ Chỉ trả về JSON (không markdown, không backticks), dạng:
         return result
     }
 
-    // Fallback khi API lỗi (vẫn đảm bảo mỗi dòng có icon)
+    // Fallback khi API lỗi
     private fun getFallbackTips(
         tempC: Int,
         weatherDesc: String,

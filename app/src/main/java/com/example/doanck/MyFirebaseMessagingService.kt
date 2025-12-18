@@ -1,4 +1,4 @@
-package com.example.doanck // Đổi package này cho đúng với dự án của bạn
+package com.example.doanck
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
