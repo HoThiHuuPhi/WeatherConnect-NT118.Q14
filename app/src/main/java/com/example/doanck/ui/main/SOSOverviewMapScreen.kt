@@ -185,7 +185,7 @@ fun SOSOverviewMapScreen(
                                         CameraUpdateFactory.newCameraPosition(
                                             CameraPosition.Builder()
                                                 .target(LatLng(clickedSOS.lat, clickedSOS.lon))
-                                                .zoom(9.0)
+                                                .zoom(15.0)
                                                 .build()
                                         )
                                     )
