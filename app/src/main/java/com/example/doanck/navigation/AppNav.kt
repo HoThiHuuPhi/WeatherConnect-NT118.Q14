@@ -1,9 +1,7 @@
 package com.example.doanck.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope // Nhớ import
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -14,40 +12,23 @@ import com.example.doanck.data.datastore.AppDataStore
 import com.example.doanck.ui.auth.ForgotPasswordScreen
 import com.example.doanck.ui.chat.CommunityChatScreen
 import com.example.doanck.ui.login.LoginScreen
-import com.example.doanck.ui.main.MainScreen
-import com.example.doanck.ui.main.RescueMapScreen
-import com.example.doanck.ui.main.SOSOverviewMapScreen
-import com.example.doanck.ui.main.SOSMonitorScreen
-import com.example.doanck.ui.main.SearchScreen
-import com.example.doanck.ui.main.SettingsScreen
-import com.example.doanck.ui.main.WeatherMapScreen
+import com.example.doanck.ui.main.*
 import com.example.doanck.ui.register.RegisterScreen
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.launch
 
 @Composable
 fun AppNav(
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    appDataStore: AppDataStore,
+    startDestination: String
 ) {
-    val context = LocalContext.current
     val auth = FirebaseAuth.getInstance()
-    val appDataStore = remember { AppDataStore(context.applicationContext) }
-
-    LaunchedEffect(auth.currentUser?.uid) {
-        val user = auth.currentUser
-        if (user != null) {
-            appDataStore.setCurrentUser(user.uid, user.email ?: "")
-        }
-    }
-
-    val startDestination = if (auth.currentUser != null) "main" else "login"
 
     NavHost(
         navController = navController,
         startDestination = startDestination
     ) {
-        // ============================================
-        // AUTH
-        // ============================================
         composable("login") {
             LoginScreen(
                 appDataStore = appDataStore,
@@ -72,31 +53,32 @@ fun AppNav(
             ForgotPasswordScreen(onBack = { navController.popBackStack() })
         }
 
-        // ============================================
-        // MÀN HÌNH CHÍNH
-        // ============================================
         composable("main") {
             MainScreen(
                 onOpenCommunityChat = { navController.navigate("chat") },
                 onOpenSettings = { navController.navigate("settings") },
                 onOpenSearch = { navController.navigate("search") },
                 onOpenWeatherMap = { navController.navigate("weather_map") },
-
-                // NÚT "BẢN ĐỒ CỨU TRỢ" → MỞ BẢN ĐỒ TỔNG QUAN
                 onOpenRescueMap = { navController.navigate("rescue_map_overview") },
-
-                onOpenRescueList = { navController.navigate("rescue_list")
-                }
+                onOpenRescueList = { navController.navigate("rescue_list") }
             )
         }
 
-        // CÁC TÍNH NĂNG KHÁC
         composable("settings") {
+            val scope = rememberCoroutineScope() // Scope cho coroutine
             SettingsScreen(
                 appDataStore = appDataStore,
                 onBack = { navController.popBackStack() },
                 onLogout = {
+                    // 1. Đăng xuất Firebase
                     auth.signOut()
+
+                    // 2. Xóa Session (UID) -> Để App biết là đã thoát
+                    scope.launch {
+                        appDataStore.clearSession()
+                    }
+
+                    // 3. Về Login
                     navController.navigate("login") {
                         popUpTo("main") { inclusive = true }
                     }
@@ -104,21 +86,10 @@ fun AppNav(
             )
         }
 
-        composable("chat") {
-            CommunityChatScreen(onBack = { navController.popBackStack() })
-        }
+        composable("chat") { CommunityChatScreen(onBack = { navController.popBackStack() }) }
+        composable("search") { SearchScreen(onBack = { navController.popBackStack() }) }
+        composable("weather_map") { WeatherMapScreen(onBack = { navController.popBackStack() }) }
 
-        composable("search") {
-            SearchScreen(onBack = { navController.popBackStack() })
-        }
-
-        composable("weather_map") {
-            WeatherMapScreen(onBack = { navController.popBackStack() })
-        }
-
-        // HỆ THỐNG CỨU TRỢ (3 ROUTES)
-
-        // BẢN ĐỒ TỔNG QUAN - Hiển thị tất cả các ca SOS
         composable("rescue_map_overview") {
             SOSOverviewMapScreen(
                 onBack = { navController.popBackStack() },
@@ -130,7 +101,6 @@ fun AppNav(
             )
         }
 
-        // DANH SÁCH CÁC CA CỨU HỘ
         composable("rescue_list") {
             SOSMonitorScreen(
                 onBack = { navController.popBackStack() },
@@ -138,9 +108,7 @@ fun AppNav(
                     val safeName = name.ifBlank { "SOS" }.replace("/", "-")
                     navController.navigate("rescue_map/$lat/$lon/$safeName")
                 },
-                onOpenMapOverview = {
-                    navController.popBackStack("rescue_map_overview", inclusive = false)
-                }
+                onOpenMapOverview = { navController.popBackStack("rescue_map_overview", false) }
             )
         }
 
@@ -151,18 +119,11 @@ fun AppNav(
                 navArgument("lon") { type = NavType.StringType },
                 navArgument("name") { type = NavType.StringType }
             )
-        ) { backStackEntry ->
-            val latStr = backStackEntry.arguments?.getString("lat") ?: "0.0"
-            val lonStr = backStackEntry.arguments?.getString("lon") ?: "0.0"
-            val name = backStackEntry.arguments?.getString("name") ?: "SOS"
-
-            RescueMapScreen(
-                lat = latStr.toDoubleOrNull() ?: 0.0,
-                lon = lonStr.toDoubleOrNull() ?: 0.0,
-                name = name,
-                onBack = { navController.popBackStack() },
-                onOpenOverview = { navController.popBackStack("rescue_map_overview", false) }
-            )
+        ) { back ->
+            val lat = back.arguments?.getString("lat")?.toDoubleOrNull() ?: 0.0
+            val lon = back.arguments?.getString("lon")?.toDoubleOrNull() ?: 0.0
+            val name = back.arguments?.getString("name") ?: "SOS"
+            RescueMapScreen(lat, lon, name, { navController.popBackStack() }, { navController.popBackStack("rescue_map_overview", false) })
         }
     }
 }

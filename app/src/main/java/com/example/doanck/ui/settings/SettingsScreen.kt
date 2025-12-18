@@ -40,8 +40,11 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-// --- MÀU SẮC GIAO DIỆN ---
-val ModernBlue = Color(0xFF3B82F6)
+// --- BẢNG MÀU: CAM & XANH DƯƠNG NHẠT ---
+val ToneCam = Color(0xFFFF7D29)       // Cam (Nút chính, Focus, Radio)
+val ToneCamNhat = Color(0xFFFFE0B2)   // Cam Nhạt (Nền Icon)
+val ToneXanhDuong = Color(0xFF38BDF8) // Xanh Dương (Nút Hủy/Đóng)
+
 val ModernBg = Color(0xFFF8FAFC)
 val CardBg = Color.White.copy(alpha = 0.95f)
 val TextPrimary = Color(0xFF1E293B)
@@ -58,27 +61,24 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Firebase Instances
+    // Firebase
     val db = Firebase.firestore
     val auth = Firebase.auth
     val storage = Firebase.storage
     val currentUser = auth.currentUser
 
-    // --- STATE QUẢN LÝ DỮ LIỆU ---
+    // State Data
     var userProfile by remember { mutableStateOf<Map<String, Any>>(emptyMap()) }
     var isAvatarUploading by remember { mutableStateOf(false) }
 
-    // --- 🔥 LOGIC ĐỒNG BỘ: CLOUD -> LOCAL (Để đổi máy không mất) ---
+    // --- ĐỒNG BỘ CLOUD ---
     LaunchedEffect(currentUser?.uid) {
         if (currentUser != null) {
-            // Lắng nghe thay đổi thực tế trên Server
             db.collection("users").document(currentUser.uid)
                 .addSnapshotListener { snapshot, _ ->
                     if (snapshot != null && snapshot.exists()) {
                         val data = snapshot.data ?: emptyMap()
-                        userProfile = data // Cập nhật UI ngay lập tức
-
-                        // Tự động lưu dự phòng vào bộ nhớ máy (AppDataStore)
+                        userProfile = data
                         scope.launch {
                             val cloudDob = data["dob"]?.toString()
                             val cloudPhone = data["phone"]?.toString()
@@ -95,64 +95,50 @@ fun SettingsScreen(
         }
     }
 
-    // Dữ liệu hiển thị (Ưu tiên lấy từ Cloud mới tải về)
     val dateOfBirth = userProfile["dob"]?.toString() ?: "01/01/2000"
     val phoneNumber = userProfile["phone"]?.toString() ?: "Chưa cập nhật"
     val gender = userProfile["gender"]?.toString() ?: "Nam"
     val avatarUrl = userProfile["avatarUrl"]?.toString()
 
-    // --- CÀI ĐẶT RIÊNG CỦA MÁY (Local) ---
     val enableAnimation by appDataStore.enableAnimation.collectAsState(initial = true)
     val enableNotifications by appDataStore.enableNotifications.collectAsState(initial = true)
     val tempUnit by appDataStore.tempUnit.collectAsState(initial = "C")
 
-    // --- UI DIALOG STATES ---
+    // UI States
     var showPhoneDialog by remember { mutableStateOf(false) }
     var showGenderDialog by remember { mutableStateOf(false) }
     var showChangePassDialog by remember { mutableStateOf(false) }
     var showAppInfoDialog by remember { mutableStateOf(false) }
-
-    // State cho DatePicker (Hybrid)
     var showDobEditDialog by remember { mutableStateOf(false) }
     var showDatePickerOverlay by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(initialDisplayMode = DisplayMode.Picker)
 
-    // Temp Inputs & Validation Errors
+    // Inputs
     var tempPhoneInput by remember { mutableStateOf("") }
     var phoneError by remember { mutableStateOf<String?>(null) }
     var tempDobInput by remember { mutableStateOf("") }
     var dobError by remember { mutableStateOf<String?>(null) }
-
     var oldPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
 
-    // --- HÀM VALIDATION & UPDATE ---
-    fun isValidPhoneNumber(phone: String): Boolean {
-        return phone.matches(Regex("^0\\d{9}$")) // Bắt đầu bằng 0, đủ 10 số
-    }
-
+    // Validation Helpers
+    fun isValidPhoneNumber(phone: String): Boolean = phone.matches(Regex("^0\\d{9}$"))
     fun isValidDate(dateStr: String): Boolean {
         return try {
             val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
             sdf.isLenient = false
             val date = sdf.parse(dateStr)
-            date != null && date.before(Date()) // Phải là ngày trong quá khứ
-        } catch (e: Exception) {
-            false
-        }
+            date != null && date.before(Date())
+        } catch (e: Exception) { false }
     }
 
-    // Hàm đẩy dữ liệu lên Cloud
     fun updateProfile(key: String, value: Any) {
         currentUser?.uid?.let { uid ->
             db.collection("users").document(uid).set(mapOf(key to value), SetOptions.merge())
-                .addOnFailureListener {
-                    Toast.makeText(context, "Lỗi kết nối Server!", Toast.LENGTH_SHORT).show()
-                }
+                .addOnFailureListener { Toast.makeText(context, "Lỗi kết nối Server!", Toast.LENGTH_SHORT).show() }
         }
     }
 
-    // Xử lý chọn ảnh Avatar
     val avatarLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let { selectedUri ->
             currentUser?.uid?.let { uid ->
@@ -160,19 +146,14 @@ fun SettingsScreen(
                 val ref = storage.reference.child("avatars/$uid.jpg")
                 ref.putFile(selectedUri).addOnSuccessListener {
                     ref.downloadUrl.addOnSuccessListener { downloadUrl ->
-                        // Khi có link ảnh -> Cập nhật vào Firestore -> Listener ở trên sẽ tự bắt và lưu về máy
                         updateProfile("avatarUrl", downloadUrl.toString())
                         isAvatarUploading = false
                     }
-                }.addOnFailureListener {
-                    isAvatarUploading = false
-                    Toast.makeText(context, "Upload ảnh thất bại", Toast.LENGTH_SHORT).show()
-                }
+                }.addOnFailureListener { isAvatarUploading = false }
             }
         }
     }
 
-    // --- GIAO DIỆN CHÍNH ---
     Scaffold(
         containerColor = ModernBg,
         topBar = {
@@ -205,7 +186,7 @@ fun SettingsScreen(
                     color = Color.LightGray
                 ) {
                     if (isAvatarUploading) {
-                        Box(contentAlignment = Alignment.Center) { CircularProgressIndicator(strokeWidth = 2.dp) }
+                        Box(contentAlignment = Alignment.Center) { CircularProgressIndicator(strokeWidth = 2.dp, color = ToneCam) }
                     } else {
                         Image(
                             painter = rememberAsyncImagePainter(avatarUrl ?: android.R.drawable.sym_def_app_icon),
@@ -217,7 +198,7 @@ fun SettingsScreen(
                 }
                 Surface(
                     modifier = Modifier.size(34.dp).offset(x = (-2).dp, y = (-2).dp).clickable { avatarLauncher.launch("image/*") },
-                    shape = CircleShape, color = ModernBlue, border = BorderStroke(2.dp, Color.White)
+                    shape = CircleShape, color = ToneCam, border = BorderStroke(2.dp, Color.White)
                 ) {
                     Icon(Icons.Default.CameraAlt, null, tint = Color.White, modifier = Modifier.padding(8.dp))
                 }
@@ -227,43 +208,27 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // --- DANH SÁCH CÀI ĐẶT ---
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-
                 SettingsGroup("HỒ SƠ CÁ NHÂN") {
-                    ProSettingActionItem(Icons.Outlined.CalendarToday, Color(0xFFF43F5E), "Ngày sinh", dateOfBirth) {
-                        tempDobInput = dateOfBirth
-                        dobError = null
-                        showDobEditDialog = true
+                    ProSettingActionItem(Icons.Outlined.CalendarToday, ToneCam, "Ngày sinh", dateOfBirth) {
+                        tempDobInput = dateOfBirth; dobError = null; showDobEditDialog = true
                     }
                     Divider(Modifier.padding(horizontal = 16.dp), color = Color.Gray.copy(0.05f))
-
-                    ProSettingActionItem(Icons.Outlined.Phone, Color(0xFF0EA5E9), "Số điện thoại", phoneNumber) {
-                        tempPhoneInput = if(phoneNumber == "Chưa cập nhật") "" else phoneNumber
-                        phoneError = null
-                        showPhoneDialog = true
+                    ProSettingActionItem(Icons.Outlined.Phone, ToneXanhDuong, "Số điện thoại", phoneNumber) {
+                        tempPhoneInput = if(phoneNumber == "Chưa cập nhật") "" else phoneNumber; phoneError = null; showPhoneDialog = true
                     }
                     Divider(Modifier.padding(horizontal = 16.dp), color = Color.Gray.copy(0.05f))
-
                     ProSettingActionItem(Icons.Outlined.Person, Color(0xFF8B5CF6), "Giới tính", gender) { showGenderDialog = true }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
                 SettingsGroup("ỨNG DỤNG") {
-                    ProSettingSwitchItem(Icons.Outlined.Notifications, Color(0xFFFF5722), "Nhận thông báo", enableNotifications) {
-                        scope.launch { appDataStore.setEnableNotifications(it) }
-                    }
+                    ProSettingSwitchItem(Icons.Outlined.Notifications, ToneCam, "Nhận thông báo", enableNotifications) { scope.launch { appDataStore.setEnableNotifications(it) } }
                     Divider(Modifier.padding(horizontal = 16.dp), color = Color.Gray.copy(0.05f))
-
-                    ProSettingSwitchItem(Icons.Outlined.AutoAwesome, Color(0xFFF59E0B), "Hiệu ứng thời tiết", enableAnimation) {
-                        scope.launch { appDataStore.setEnableAnimation(it) }
-                    }
+                    ProSettingSwitchItem(Icons.Outlined.AutoAwesome, ToneXanhDuong, "Hiệu ứng thời tiết", enableAnimation) { scope.launch { appDataStore.setEnableAnimation(it) } }
                     Divider(Modifier.padding(horizontal = 16.dp), color = Color.Gray.copy(0.05f))
-
-                    ProSettingActionItem(Icons.Outlined.Thermostat, Color(0xFF10B981), "Đơn vị nhiệt độ", "Độ $tempUnit") {
-                        scope.launch { appDataStore.setTempUnit(if (tempUnit == "C") "F" else "C") }
-                    }
+                    ProSettingActionItem(Icons.Outlined.Thermostat, Color(0xFF10B981), "Đơn vị nhiệt độ", "Độ $tempUnit") { scope.launch { appDataStore.setTempUnit(if (tempUnit == "C") "F" else "C") } }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -271,8 +236,7 @@ fun SettingsScreen(
                 SettingsGroup("HỆ THỐNG") {
                     ProSettingActionItem(Icons.Outlined.Lock, Color(0xFF64748B), "Đổi mật khẩu") { showChangePassDialog = true }
                     Divider(Modifier.padding(horizontal = 16.dp), color = Color.Gray.copy(0.05f))
-
-                    ProSettingActionItem(Icons.Outlined.Info, Color(0xFF3B82F6), "Về ứng dụng") { showAppInfoDialog = true }
+                    ProSettingActionItem(Icons.Outlined.Info, ToneCam, "Về ứng dụng") { showAppInfoDialog = true }
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -281,7 +245,7 @@ fun SettingsScreen(
                     onClick = { scope.launch { appDataStore.clearSession(); onLogout() } },
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFE4E6), contentColor = Color(0xFFE11D48))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFE4E6), contentColor = ErrorColor)
                 ) {
                     Icon(Icons.Outlined.Logout, null)
                     Spacer(Modifier.width(8.dp))
@@ -292,17 +256,17 @@ fun SettingsScreen(
         }
     }
 
-    // --- CÁC DIALOG (CỬA SỔ BẬT LÊN) ---
+    // --- CÁC DIALOG (ĐỒNG BỘ MÀU CAM & XANH DƯƠNG) ---
 
-    // 1. DIALOG NGÀY SINH (Hybrid)
+    // 1. DIALOG NGÀY SINH
     if (showDobEditDialog) {
         AlertDialog(
             onDismissRequest = { showDobEditDialog = false },
-            shape = RoundedCornerShape(24.dp),
-            title = { Text("Cập nhật ngày sinh", fontWeight = FontWeight.Bold) },
+            containerColor = Color.White,
+            title = { Text("Cập nhật ngày sinh", fontWeight = FontWeight.Bold, color = TextPrimary) },
             text = {
                 Column {
-                    Text("Nhập định dạng dd/MM/yyyy hoặc chọn lịch", fontSize = 14.sp, color = TextSecondary)
+                    Text("Nhập dd/MM/yyyy hoặc chọn lịch", fontSize = 14.sp, color = TextSecondary)
                     Spacer(Modifier.height(16.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
@@ -311,7 +275,11 @@ fun SettingsScreen(
                             label = { Text("Ngày sinh") },
                             placeholder = { Text("01/01/2000") },
                             isError = dobError != null,
-                            supportingText = { if (dobError != null) Text(dobError!!, color = ErrorColor) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = ToneCam,
+                                focusedLabelColor = ToneCam,
+                                cursorColor = ToneCam
+                            ),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
@@ -319,77 +287,70 @@ fun SettingsScreen(
                         Spacer(Modifier.width(8.dp))
                         FilledIconButton(
                             onClick = { showDatePickerOverlay = true },
-                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = ModernBlue.copy(alpha = 0.1f))
+                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = ToneCamNhat)
                         ) {
-                            Icon(Icons.Default.DateRange, null, tint = ModernBlue)
+                            Icon(Icons.Default.DateRange, null, tint = ToneCam)
                         }
                     }
+                    if (dobError != null) Text(dobError!!, color = ErrorColor, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    if (isValidDate(tempDobInput)) {
-                        updateProfile("dob", tempDobInput)
-                        showDobEditDialog = false
-                    } else {
-                        dobError = "Ngày không hợp lệ!"
-                    }
-                }) { Text("Lưu") }
+                Button(
+                    onClick = { if (isValidDate(tempDobInput)) { updateProfile("dob", tempDobInput); showDobEditDialog = false } else dobError = "Ngày không hợp lệ!" },
+                    colors = ButtonDefaults.buttonColors(containerColor = ToneCam)
+                ) { Text("Lưu") }
             },
-            dismissButton = { TextButton(onClick = { showDobEditDialog = false }) { Text("Hủy") } }
+            dismissButton = { TextButton(onClick = { showDobEditDialog = false }, colors = ButtonDefaults.textButtonColors(contentColor = ToneXanhDuong)) { Text("Hủy") } }
         )
     }
 
-    // Overlay Lịch
     if (showDatePickerOverlay) {
         DatePickerDialog(
             onDismissRequest = { showDatePickerOverlay = false },
             confirmButton = {
                 TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        tempDobInput = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(millis))
-                        dobError = null
-                    }
+                    datePickerState.selectedDateMillis?.let { millis -> tempDobInput = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(millis)); dobError = null }
                     showDatePickerOverlay = false
-                }) { Text("Chọn") }
+                }, colors = ButtonDefaults.textButtonColors(contentColor = ToneCam)) { Text("Chọn") }
             },
-            dismissButton = { TextButton(onClick = { showDatePickerOverlay = false }) { Text("Đóng") } }
+            dismissButton = { TextButton(onClick = { showDatePickerOverlay = false }, colors = ButtonDefaults.textButtonColors(contentColor = ToneXanhDuong)) { Text("Đóng") } }
         ) { DatePicker(state = datePickerState) }
     }
 
-    // 2. DIALOG SỐ ĐIỆN THOẠI (Validation)
+    // 2. DIALOG SỐ ĐIỆN THOẠI
     if (showPhoneDialog) {
         AlertDialog(
             onDismissRequest = { showPhoneDialog = false },
-            shape = RoundedCornerShape(24.dp),
-            title = { Text("Cập nhật số điện thoại", fontWeight = FontWeight.Bold) },
+            containerColor = Color.White,
+            title = { Text("Cập nhật số điện thoại", fontWeight = FontWeight.Bold, color = TextPrimary) },
             text = {
-                OutlinedTextField(
-                    value = tempPhoneInput,
-                    onValueChange = {
-                        tempPhoneInput = it
-                        if (it.all { c -> c.isDigit() }) phoneError = null
-                    },
-                    label = { Text("Số điện thoại") },
-                    isError = phoneError != null,
-                    supportingText = { if (phoneError != null) Text(phoneError!!, color = ErrorColor) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
-                )
+                Column {
+                    OutlinedTextField(
+                        value = tempPhoneInput,
+                        onValueChange = { tempPhoneInput = it; if (it.all { c -> c.isDigit() }) phoneError = null },
+                        label = { Text("Số điện thoại") },
+                        isError = phoneError != null,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ToneCam,
+                            focusedLabelColor = ToneCam,
+                            cursorColor = ToneCam
+                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+                    if (phoneError != null) Text(phoneError!!, color = ErrorColor, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
             },
             confirmButton = {
-                Button(onClick = {
-                    if (isValidPhoneNumber(tempPhoneInput)) {
-                        updateProfile("phone", tempPhoneInput)
-                        showPhoneDialog = false
-                    } else {
-                        phoneError = "SĐT phải 10 số, bắt đầu bằng 0"
-                    }
-                }) { Text("Lưu") }
+                Button(
+                    onClick = { if (isValidPhoneNumber(tempPhoneInput)) { updateProfile("phone", tempPhoneInput); showPhoneDialog = false } else phoneError = "SĐT phải 10 số, bắt đầu bằng 0" },
+                    colors = ButtonDefaults.buttonColors(containerColor = ToneCam)
+                ) { Text("Lưu") }
             },
-            dismissButton = { TextButton(onClick = { showPhoneDialog = false }) { Text("Hủy") } }
+            dismissButton = { TextButton(onClick = { showPhoneDialog = false }, colors = ButtonDefaults.textButtonColors(contentColor = ToneXanhDuong)) { Text("Hủy") } }
         )
     }
 
@@ -397,27 +358,27 @@ fun SettingsScreen(
     if (showGenderDialog) {
         AlertDialog(
             onDismissRequest = { showGenderDialog = false },
-            shape = RoundedCornerShape(24.dp),
             containerColor = Color.White,
-            title = { Text("Chọn giới tính", fontWeight = FontWeight.Bold) },
+            title = { Text("Chọn giới tính", fontWeight = FontWeight.Bold, color = TextPrimary) },
             text = {
                 Column {
                     listOf("Nam", "Nữ", "Khác").forEach { option ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                updateProfile("gender", option)
-                                showGenderDialog = false
-                            }.padding(12.dp)
+                            modifier = Modifier.fillMaxWidth().clickable { updateProfile("gender", option); showGenderDialog = false }.padding(12.dp)
                         ) {
-                            RadioButton(selected = (gender == option), onClick = null)
+                            RadioButton(
+                                selected = (gender == option),
+                                onClick = null,
+                                colors = RadioButtonDefaults.colors(selectedColor = ToneCam, unselectedColor = Color.Gray)
+                            )
                             Spacer(Modifier.width(8.dp))
                             Text(option)
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showGenderDialog = false }) { Text("Đóng") } }
+            confirmButton = { TextButton(onClick = { showGenderDialog = false }, colors = ButtonDefaults.textButtonColors(contentColor = ToneXanhDuong)) { Text("Đóng") } }
         )
     }
 
@@ -428,9 +389,8 @@ fun SettingsScreen(
 
         AlertDialog(
             onDismissRequest = { if (!isProcessing) showChangePassDialog = false },
-            shape = RoundedCornerShape(24.dp),
             containerColor = Color.White,
-            title = { Text("Bảo mật tài khoản", fontWeight = FontWeight.Bold) },
+            title = { Text("Bảo mật tài khoản", fontWeight = FontWeight.Bold, color = TextPrimary) },
             text = {
                 Column {
                     Text("Xác nhận mật khẩu cũ trước khi đổi.", fontSize = 14.sp, color = TextSecondary)
@@ -440,6 +400,7 @@ fun SettingsScreen(
                         onValueChange = { oldPassword = it },
                         label = { Text("Mật khẩu hiện tại") },
                         visualTransformation = PasswordVisualTransformation(),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ToneCam, focusedLabelColor = ToneCam, cursorColor = ToneCam),
                         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), singleLine = true, enabled = !isProcessing
                     )
                     Spacer(Modifier.height(12.dp))
@@ -448,9 +409,10 @@ fun SettingsScreen(
                         onValueChange = { newPassword = it },
                         label = { Text("Mật khẩu mới (min 6 ký tự)") },
                         visualTransformation = PasswordVisualTransformation(),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ToneCam, focusedLabelColor = ToneCam, cursorColor = ToneCam),
                         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), singleLine = true, enabled = !isProcessing
                     )
-                    if (isProcessing) LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
+                    if (isProcessing) LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), color = ToneCam)
                 }
             },
             confirmButton = {
@@ -475,10 +437,11 @@ fun SettingsScreen(
                                 isProcessing = false
                             }
                         }
-                    }
-                ) { Text("Cập nhật") }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ToneCam)
+                ) { Text(if (isProcessing) "Đang xử lý..." else "Cập nhật") }
             },
-            dismissButton = { TextButton(enabled = !isProcessing, onClick = { showChangePassDialog = false }) { Text("Hủy") } }
+            dismissButton = { TextButton(enabled = !isProcessing, onClick = { showChangePassDialog = false }, colors = ButtonDefaults.textButtonColors(contentColor = ToneXanhDuong)) { Text("Hủy") } }
         )
     }
 
@@ -486,9 +449,10 @@ fun SettingsScreen(
     if (showAppInfoDialog) {
         AlertDialog(
             onDismissRequest = { showAppInfoDialog = false },
-            title = { Text("Weather Connect") },
+            containerColor = Color.White,
+            title = { Text("Weather Connect", color = ToneCam, fontWeight = FontWeight.Bold) },
             text = { Text("Phiên bản 1.0.0\nNhóm Đồ Án Di Động") },
-            confirmButton = { Button(onClick = { showAppInfoDialog = false }) { Text("Đóng") } }
+            confirmButton = { Button(onClick = { showAppInfoDialog = false }, colors = ButtonDefaults.buttonColors(containerColor = ToneCam)) { Text("Đóng") } }
         )
     }
 }
@@ -525,6 +489,6 @@ fun ProSettingSwitchItem(icon: ImageVector, color: Color, title: String, checked
         }
         Spacer(Modifier.width(16.dp))
         Text(title, Modifier.weight(1f), fontWeight = FontWeight.Medium, color = TextPrimary)
-        Switch(checked = checked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedTrackColor = ModernBlue))
+        Switch(checked = checked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedTrackColor = ToneCam))
     }
 }
