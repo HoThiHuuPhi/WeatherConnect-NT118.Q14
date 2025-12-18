@@ -339,7 +339,8 @@ fun WeatherContentV2(
                     feelsLikeMin = daily.apparentTempMin?.getOrNull(index)?.let { convertTemp(it) },
                     feelsLikeMax = daily.apparentTempMax?.getOrNull(index)?.let { convertTemp(it) },
                     humidityMean = daily.humidityMean?.getOrNull(index)?.roundToInt(),
-                    windSpeedMax = daily.windSpeedMax?.getOrNull(index)?.roundToInt()
+                    windSpeedMax = daily.windSpeedMax?.getOrNull(index)?.roundToInt(),
+                    snowfallSum = daily.snowfallSum?.getOrNull(index)
                 ))
             }
 
@@ -360,7 +361,7 @@ fun WeatherContentV2(
         else if (errorText != null) Text(errorText!!, color = Color.White, modifier = Modifier.align(Alignment.Center))
         else weatherData?.let { data ->
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 24.dp, bottom = 100.dp),
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 24.dp, bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 MainWeatherDisplay(data.current, tempUnit)

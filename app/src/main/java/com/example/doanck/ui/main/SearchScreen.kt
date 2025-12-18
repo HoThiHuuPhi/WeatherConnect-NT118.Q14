@@ -505,7 +505,8 @@ fun SearchWeatherResult(
                         rainProbability = daily.rainProbabilities?.getOrNull(index),
                         rainSumMm = daily.rainSums?.getOrNull(index),
                         hourlyTemps = hourlyTempsByDate[dateStr] ?: emptyList(),
-                        hourlyWeatherCodes = hourlyCodesByDate[dateStr] ?: emptyList()
+                        hourlyWeatherCodes = hourlyCodesByDate[dateStr] ?: emptyList(),
+                        snowfallSum = daily.snowfallSum?.getOrNull(index)
                     )
                 )
             }
@@ -594,7 +595,7 @@ fun SearchWeatherResult(
                         sunsetHHmm = toHHmm(d.sunset?.firstOrNull()),
                         rainMm = c.rain ?: c.precipitation,
                         rainSumMm = d.rainSums?.firstOrNull() ?: d.rainSum?.firstOrNull(),
-                        snowfallMm = c.snowfall,
+                        snowfallMm = d.snowfallSum?.firstOrNull() ?: c.snowfall,
                         humidityPercent = c.humidity,
                         pressureMslHPa = c.pressureMsl,
                         pressureHPa = c.pressure,

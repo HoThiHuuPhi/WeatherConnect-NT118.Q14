@@ -35,7 +35,7 @@ enum class MainTab {
 
 private val HourlyGlassDark = Color(0xFF020617).copy(alpha = 0.4f)
 
-private val FloatingMenuGradient = Color(0xFF1D1E23).copy(alpha = 0.9f)
+private val FloatingMenuGradient = Color(0xFF747F94).copy(alpha = 0.9f)
 
 @Composable
 fun MainTopNavBar(
@@ -169,7 +169,7 @@ private fun FloatingOptionItem(
                 text = text,
                 color = Color.White,
                 fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.Normal,
                 style = LocalTextStyle.current.copy(
                     shadow = androidx.compose.ui.graphics.Shadow(
                         color = Color.Black.copy(alpha = 0.3f),

@@ -40,6 +40,8 @@ import com.example.doanck.ui.theme.SFProDisplay
 import com.example.doanck.utils.WeatherUtils
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import kotlin.div
 import kotlin.text.toInt
 import kotlin.times
@@ -58,7 +60,8 @@ data class DailyDisplayItem(
     val feelsLikeMin: Int? = null,
     val feelsLikeMax: Int? = null,
     val humidityMean: Int? = null,
-    val windSpeedMax: Int? = null
+    val windSpeedMax: Int? = null,
+    val snowfallSum: Double? = null
 )
 
 data class ChartPoint(
@@ -306,6 +309,7 @@ fun WeatherDetailBottomSheet(
                 .fillMaxWidth()
                 .padding(24.dp)
                 .padding(bottom = 20.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -398,6 +402,14 @@ fun WeatherDetailBottomSheet(
             InfoRow("Khả năng có mưa", day.rainProbability?.let { "Khoảng $it%" } ?: "Chưa có dữ liệu.")
             Spacer(Modifier.height(16.dp))
             InfoRow("Tổng lượng mưa (mm)", day.rainSumMm?.let { String.format("%.1f mm", it) } ?: "Chưa có dữ liệu lượng mưa.")
+            if (day.snowfallSum != null && day.snowfallSum > 0) {
+                Spacer(Modifier.height(16.dp))
+                InfoRow(
+                    title = "Tổng lượng tuyết rơi (mm)",
+                    content = String.format("%.1f mm", day.snowfallSum)
+                )
+            }
+
             Spacer(Modifier.height(16.dp))
             val dailySummary = buildString {
                 append("Nhiệt độ dao động từ ${day.minTemp}°$unit đến ${day.maxTemp}°$unit.")
@@ -406,6 +418,9 @@ fun WeatherDetailBottomSheet(
                 }
                 day.rainSumMm?.let {
                     if (it > 0.0) append(" Tổng lượng mưa dự kiến khoảng ${"%.1f".format(it)} mm.")
+                }
+                day.snowfallSum?.let {
+                    if (it > 0.0) append(" Tổng lượng tuyết rơi dự kiến khoảng ${"%.1f".format(it)} mm.")
                 }
                 day.humidityMean?.let {
                     append(" Độ ẩm trung bình khoảng $it%.")

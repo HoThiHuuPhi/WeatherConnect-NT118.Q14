@@ -186,7 +186,7 @@ fun RescueMapScreen(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp)
+                    .padding(top = 16.dp, start = 16.dp, end = 16.dp)
                     .fillMaxWidth()
                     .shadow(12.dp, RoundedCornerShape(20.dp))
                     .background(

@@ -7,48 +7,83 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
-@OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun WeatherMapScreen(onBack: () -> Unit) {
     var isLoading by remember { mutableStateOf(true) }
     var hasError by remember { mutableStateOf(false) }
 
-    // DÙNG VENTUSKY: Nhẹ hơn, ít lỗi xám màn hình hơn Windy
-    // l=temperature-2m: Lớp nhiệt độ (màu sắc đẹp)
-    // l=rain-3h: Lớp mưa
-    // p=16.0;106.0;5: Tọa độ Việt Nam, Zoom 5
     val mapUrl = "https://www.ventusky.com/?p=16.0;106.0;5&l=temperature-2m"
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Bản đồ mật độ Thời tiết", color = Color.White) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF191C2A))
-            )
+    Column(modifier = Modifier.fillMaxSize()) {
+        // HEADER BOX với Gradient - TRÀN LÊN STATUS BAR
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFF4A90E2),  // Xanh dương đậm
+                            Color(0xFF50C9C3),  // Xanh ngọc
+                            Color(0xFF96E6A1)   // Xanh lá nhạt
+                        )
+                    )
+                )
+                .statusBarsPadding()  // Padding sau background để gradient tràn lên
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // NÚT BACK
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        "Back",
+                        tint = Color.White
+                    )
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                // TITLE
+                Text(
+                    "Bản đồ mật độ Thời tiết",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
-    ) { padding ->
+
+        // WebView content - Không bị header che nữa
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+                .weight(1f)
+                .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
             if (hasError) {
@@ -57,7 +92,6 @@ fun WeatherMapScreen(onBack: () -> Unit) {
                 AndroidView(
                     factory = { context ->
                         WebView(context).apply {
-                            // Cấu hình WebView tối đa để tránh lỗi hiển thị
                             settings.apply {
                                 javaScriptEnabled = true
                                 domStorageEnabled = true
@@ -66,12 +100,9 @@ fun WeatherMapScreen(onBack: () -> Unit) {
                                 useWideViewPort = true
                                 builtInZoomControls = false
                                 displayZoomControls = false
-
-                                // QUAN TRỌNG: Cho phép tải nội dung hỗn hợp (tránh lỗi xám xịt do thiếu ảnh)
                                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                             }
 
-                            // Bắt buộc dùng Hardware Acceleration cho bản đồ
                             setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
 
                             webViewClient = object : WebViewClient() {
@@ -85,7 +116,6 @@ fun WeatherMapScreen(onBack: () -> Unit) {
                                 }
 
                                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                                    // Chỉ hiện lỗi nếu là lỗi chính, bỏ qua lỗi nhỏ
                                     if (request?.isForMainFrame == true) {
                                         isLoading = false
                                         hasError = true
