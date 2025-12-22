@@ -1,4 +1,4 @@
-# ĐỒ ÁN: WeatherConnect 🌦️🆘
+# Đồ án: WeatherConnect 🌦️🆘
 Đồ án môn **Phát triển ứng dụng trên thiết bị di động** (NT118.Q14) – UIT.  
 **WeatherConnect** là ứng dụng theo dõi thời tiết theo vị trí, kết nối cộng đồng và hỗ trợ gửi tín hiệu **SOS** trong tình huống khẩn cấp.
 
