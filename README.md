@@ -89,15 +89,6 @@ Project đang dùng Firebase. Nếu bạn **fork và dùng Firebase riêng**:
 
 ---
 
-## 🎬 Demo flow gợi ý (1–2 phút)
-1. Login → Main (xem thời tiết)
-2. Mở **AI Advisor**
-3. Nhấn **SOS** → gửi → chọn **Mở danh sách SOS** (hoặc đóng để về Main)
-4. Mở **Bản đồ SOS tổng quan** → chọn SOS → vào **map chi tiết**
-5. Vào **Chat** gửi tin nhắn (tag Cảnh báo)
-
----
-
 ## 🎓 Thành viên thực hiện
 | MSSV | Họ và Tên | Email | Github |
 |---|---|---|---|
