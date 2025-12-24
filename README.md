@@ -69,17 +69,6 @@ Start destination: **Nếu đã đăng nhập → `main`, chưa đăng nhập �
 2. Mở bằng Android Studio
 3. Sync Gradle
 4. Run `app`
-
-### 3) Firebase
-Project đang dùng Firebase. Nếu bạn **fork và dùng Firebase riêng**:
-- Tạo Firebase project → Add Android app
-- Tải `google-services.json` và đặt vào thư mục `app/`
-- Bật các dịch vụ cần thiết: Auth / Firestore / Storage / (FCM nếu dùng)
-
-### 4) API Key bản đồ / AI (nếu có)
-- VietMap: nếu project đang để key trong code, bạn có thể thay bằng key của bạn.
-- AI Advisor: tuỳ theo code module AI, nếu thiếu API key thì phần gọi AI có thể không hoạt động (app vẫn chạy các chức năng khác).
-
 ---
 
 ## 🔐 Quyền truy cập (Permissions)
